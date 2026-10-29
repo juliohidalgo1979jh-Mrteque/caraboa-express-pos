@@ -261,8 +261,11 @@ def create_app(
     database_url: str | None = None,
     frontend_dist: Path | None = FRONTEND_DIST,
     admin_pin: str | None = None,
+    manager_pin: str | None = None,
 ) -> FastAPI:
     pin = admin_pin if admin_pin is not None else os.getenv("ADMIN_PIN", "")
+    # Clave del encargado: puede cargar y editar datos, pero no borrar ni tocar ajustes sensibles.
+    mgr_pin = manager_pin if manager_pin is not None else os.getenv("MANAGER_PIN", "")
     url = normalize_database_url(database_url or os.getenv("DATABASE_URL") or "sqlite:///./foodtruck_erp.db")
     connect_args = {"check_same_thread": False} if url.startswith("sqlite") else {}
     engine = create_engine(url, connect_args=connect_args)
@@ -331,9 +334,19 @@ def create_app(
         with session_factory() as session:
             yield session
 
-    def require_admin(x_admin_pin: str = Header(default="")) -> None:
-        if pin and not secrets.compare_digest(x_admin_pin.encode(), pin.encode()):
-            raise HTTPException(status_code=401, detail="PIN incorrecto")
+    owner_only_paths = ("/api/points", "/api/portal/settings", "/api/settings/heading")
+
+    def require_admin(request: Request, x_admin_pin: str = Header(default="")) -> None:
+        if not pin:
+            return
+        given = x_admin_pin.encode()
+        if secrets.compare_digest(given, pin.encode()):
+            return
+        if mgr_pin and secrets.compare_digest(given, mgr_pin.encode()):
+            if request.method == "DELETE" or request.url.path.startswith(owner_only_paths) and request.method != "GET":
+                raise HTTPException(status_code=403, detail="Esta acción es solo para el administrador")
+            return
+        raise HTTPException(status_code=401, detail="PIN incorrecto")
 
     def find_or_create_category(session: Session, name: str) -> Category:
         category = session.scalar(select(Category).where(Category.name == name))

@@ -78,3 +78,9 @@ Una página pública y liviana en `/pedir` (por ejemplo `https://tu-servicio.onr
 - Los cobros se registran por medio de pago; la integración con terminales, Mercado Pago (cobro automático) y la impresión Bluetooth requieren configuración de hardware y proveedor.
 - El costo de un artículo es el de su última compra. Los reportes y el descuento de stock incluyen solo las ventas ya sincronizadas.
 - El backend sincroniza turnos y ventas idempotentemente. Catering y pagos combinados en una misma venta quedan para fases siguientes.
+## Claves de acceso
+
+- `ADMIN_PIN`: clave del administrador (dueño). Puede todo.
+- `MANAGER_PIN` (opcional): clave del encargado. Puede cargar y editar datos (carta, inventario, proveedores, promociones, pedidos online), pero no borrar nada ni cambiar los ajustes del portal, los puntos de venta ni el encabezado.
+
+Se configuran en Render → servicio → Environment.

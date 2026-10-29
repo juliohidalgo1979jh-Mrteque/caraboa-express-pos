@@ -15,6 +15,10 @@ services:
       # PIN para editar la carta. Render genera uno al azar; puedes cambiarlo en Environment.
       - key: ADMIN_PIN
         generateValue: true
+      # Clave del encargado: carga y edita datos, pero no borra ni cambia ajustes sensibles.
+      # Se escribe a mano en el panel de Render (Environment).
+      - key: MANAGER_PIN
+        sync: false
       - key: DATABASE_URL
         fromDatabase:
           name: caraboa-express-db

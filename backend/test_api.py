@@ -643,3 +643,15 @@ def test_kitchen_comandas_print_once_and_public_ticket(tmp_path):
         assert "Tequeños &lt;5&gt;" in ticket.text and "<5>" not in ticket.text  # escapado
         assert "R$ 13,00" in ticket.text
         assert "todavía no está disponible" in client.get("/ticket/no-existe").text
+
+
+def test_manager_pin_can_edit_but_not_delete(tmp_path):
+    from fastapi.testclient import TestClient
+    app = create_app(database_url=f"sqlite:///{tmp_path}/m.db", frontend_dist=None, admin_pin="1111", manager_pin="2222")
+    with TestClient(app) as c:
+        owner, mgr = {"X-Admin-Pin": "1111"}, {"X-Admin-Pin": "2222"}
+        assert c.post("/api/admin/verify", headers={"X-Admin-Pin": "x"}).status_code == 401
+        assert c.post("/api/admin/verify", headers=mgr).status_code == 200
+        assert c.delete("/api/products/1", headers=mgr).status_code == 403
+        assert c.put("/api/portal/settings", headers=mgr, json={}).status_code == 403
+        assert c.delete("/api/products/1", headers=owner).status_code in (200, 204)
