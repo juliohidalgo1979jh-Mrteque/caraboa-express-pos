@@ -11,9 +11,10 @@ from .models import PointOfSale, Sale
 
 PAYMENT_METHODS = ("EFECTIVO", "TARJETA", "QR", "TRANSFERENCIA", "MERCADO_PAGO")
 
+# Todos los medios habilitados desde el inicio; cada negocio los ajusta en "Puntos de venta".
 DEFAULT_POINTS = [
-    {"name": "Laptop principal", "code": "A", "methods": ["EFECTIVO"]},
-    {"name": "Celular 1", "code": "B", "methods": ["TRANSFERENCIA", "MERCADO_PAGO", "QR", "TARJETA"]},
+    {"name": "Laptop principal", "code": "A", "methods": list(PAYMENT_METHODS)},
+    {"name": "Celular 1", "code": "B", "methods": list(PAYMENT_METHODS)},
 ]
 
 

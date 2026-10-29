@@ -350,7 +350,7 @@ def test_points_of_sale_and_sales_per_point(tmp_path):
     with TestClient(app) as client:
         points = client.get("/api/points").json()
         assert [point["name"] for point in points] == ["Laptop principal", "Celular 1"]
-        assert points[0]["methods"] == ["EFECTIVO"]
+        assert points[0]["methods"] == ["EFECTIVO", "TARJETA", "QR", "TRANSFERENCIA", "MERCADO_PAGO"]
 
         new_point = {"name": "Celular 2", "methods": ["MERCADO_PAGO", "TRANSFERENCIA", "MERCADO_PAGO"]}
         assert client.post("/api/points", json=new_point).status_code == 401

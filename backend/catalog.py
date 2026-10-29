@@ -12,3 +12,22 @@ PRODUCTS = [
 ]
 
 TONES = ("gold", "coral", "mint", "yellow", "pink", "sage", "lime", "cream", "blue", "lavender")
+
+# Textos del portal para clientes: id de producto -> {idioma: (nombre, descripción)}.
+# El español es el nombre del producto; la descripción es opcional y la completa el negocio.
+TRANSLATIONS = {
+    1: {"pt": ("Pizza Margarita 25 cm", ""), "en": ("Margherita Pizza 25 cm (10 in)", "")},
+    2: {"pt": ("Pizza Portuguesa 25 cm", ""), "en": ("Portuguesa Pizza 25 cm (10 in)", "")},
+    3: {"pt": ("Pizza Calabresa 25 cm", ""), "en": ("Calabresa (Sausage) Pizza 25 cm (10 in)", "")},
+    4: {"pt": ("Pizza 4 Queijos 25 cm", ""), "en": ("4 Cheese Pizza 25 cm (10 in)", "")},
+    5: {"pt": ("Pizza Salame 25 cm", ""), "en": ("Salami Pizza 25 cm (10 in)", "")},
+    6: {"pt": ("Hambúrguer normal", ""), "en": ("Classic burger", "")},
+    7: {"pt": ("Hambúrguer especial", ""), "en": ("Special burger", "")},
+    8: {"pt": ("Sanduíche de frango", ""), "en": ("Chicken sandwich", "")},
+    9: {"pt": ("Sanduíche de pernil", ""), "en": ("Roast pork sandwich", "")},
+    10: {
+        "es": ("", "Deditos de masa rellenos de queso, fritos."),
+        "pt": ("Tequeños (10 unidades)", "Palitinhos de massa recheados com queijo, fritos."),
+        "en": ("Tequeños (10 pieces)", "Fried dough sticks filled with cheese."),
+    },
+}

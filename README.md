@@ -56,9 +56,21 @@ La API crea las tablas al iniciar si no existen. La base gratuita de Render cadu
 | **Inventario** | Productos (se compran listos) e insumos (se gastan al preparar): stock, mínimo, costo, compras y conteos. |
 | **Recetas y costos** | Qué lleva cada ítem de la carta, costo sumado, % de ganancia y precio sugerido (redondeado a $10). Cada venta descuenta stock según la receta. |
 | **Proveedores** y **Equipos** | Altas y edición; los equipos registran estado, valor y fecha de compra. |
+| **Portal de pedidos** | Pedidos directos de clientes en `/pedir`: pedidos online, promociones, traducciones y enlace con QR. |
 | **Puntos de venta** | Cada laptop o celular elige su punto; turnos y ventas quedan identificados. |
 
 Las secciones de administración piden el PIN de `ADMIN_PIN`.
+
+## Portal de pedidos para clientes
+
+Una página pública y liviana en `/pedir` (por ejemplo `https://tu-servicio.onrender.com/pedir`) para pegar en el perfil de WhatsApp Business, en Instagram o en un QR:
+
+- **Tres idiomas** (español, portugués e inglés) con selector; se abre en el idioma del celular. Los nombres y descripciones de la carta se traducen desde **Portal de pedidos → Traducciones**; si falta una traducción se muestra el español.
+- **Carrito y pedido:** el cliente elige productos, deja nombre, WhatsApp y retiro o entrega. El pedido se guarda en el servidor (aparece en **Pedidos online**, con aviso cada 20 segundos) y el cliente puede enviárselo al local por WhatsApp con un mensaje ya armado (en español, para el negocio).
+- **Promociones** (Portal de pedidos → Promociones): descuento automático por porcentaje, con monto mínimo y fecha de vencimiento opcionales; descuento solo en la **primera compra** (se verifica por teléfono: el mismo número no vuelve a recibirlo, salvo que cancelen ese pedido); o solo un aviso. Si hay varias, se aplica la mejor; no se suman. El servidor calcula precios y descuentos, nunca el navegador.
+- **Ajustes** (Portal de pedidos → Enlace y ajustes): nombre, WhatsApp del negocio (código de país + área, p. ej. `5548988102993`), abrir o cerrar la recepción de pedidos, enlace con botón de copiar y QR.
+- El pago se coordina por WhatsApp al confirmar (efectivo, Pix, tarjeta…); el portal no cobra en línea.
+- Los pedidos online **no descuentan stock ni entran a los reportes de ventas** todavía: para eso se cobran en el Punto de venta.
 
 ## Límites del MVP
 

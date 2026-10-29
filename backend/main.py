@@ -7,18 +7,20 @@ from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from typing import Any, Literal
 
-from fastapi import Depends, FastAPI, Header, HTTPException, Response
+from fastapi import Depends, FastAPI, Header, HTTPException, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import MetaData, Table, create_engine, event, inspect, select, update
 from sqlalchemy.orm import Session, sessionmaker
 
-from .catalog import PRODUCTS, TONES
-from .models import Base, Category, PointOfSale, Product, ProductImage, Sale, Setting, Shift
+from .catalog import PRODUCTS, TONES, TRANSLATIONS
+from .models import Base, Category, PointOfSale, Product, ProductImage, ProductText, Sale, Setting, Shift
 from .inventory import deduct_stock_for_sale, register_inventory_routes
 from .kitchen import register_kitchen_routes
 from .points import PAYMENT_METHODS, register_point_routes, seed_points
+from .portal import register_portal_routes
 from .reports import local_day_bounds, register_report_routes
 
 FRONTEND_DIST = Path(__file__).resolve().parent.parent / "dist"
@@ -300,6 +302,11 @@ def create_app(
                 )
                 for item in PRODUCTS
             )
+            session.add_all(
+                ProductText(product_id=product_id, lang=lang, name=name, description=description)
+                for product_id, langs in TRANSLATIONS.items()
+                for lang, (name, description) in langs.items()
+            )
             session.commit()
         seed_points(session)
     if engine.dialect.name == "postgresql":
@@ -430,6 +437,7 @@ def create_app(
     register_inventory_routes(app, get_db, require_admin)
     register_report_routes(app, get_db, require_admin)
     register_kitchen_routes(app, get_db)
+    register_portal_routes(app, get_db, require_admin)
 
     @app.get("/api/settings/heading")
     def get_heading(session: Session = Depends(get_db)) -> dict[str, str]:
@@ -635,6 +643,14 @@ def create_app(
             raise
 
         return {"ok": True, "duplicate": False, "server_id": sale_id}
+
+    # Portal de pedidos para clientes: una página aparte, ligera, en /pedir (es el enlace que se comparte por WhatsApp).
+    if frontend_dist is not None and (frontend_dist / "portal.html").is_file():
+        @app.get("/pedir", include_in_schema=False)
+        def portal_page(request: Request) -> HTMLResponse:
+            html = (frontend_dist / "portal.html").read_text(encoding="utf-8")
+            # Las vistas previas de WhatsApp necesitan la dirección completa de la imagen.
+            return HTMLResponse(html.replace("%BASE%", str(request.base_url).rstrip("/")))
 
     # En producción la API también sirve el frontend compilado (npm run build), en el mismo dominio.
     if frontend_dist is not None and (frontend_dist / "index.html").is_file():

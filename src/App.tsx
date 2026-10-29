@@ -11,6 +11,7 @@ import {
   CircleDollarSign,
   Clock3,
   Cloud,
+  Globe,
   Handshake,
   CloudOff,
   Coffee,
@@ -41,6 +42,7 @@ import { InventoryAdmin } from './admin/InventoryAdmin';
 import { PointsAdmin } from './admin/PointsAdmin';
 import { RecipesAdmin } from './admin/RecipesAdmin';
 import { ReportsAdmin } from './admin/ReportsAdmin';
+import { PortalAdmin } from './admin/PortalAdmin';
 import { SuppliersAdmin } from './admin/SuppliersAdmin';
 import { KitchenScreen } from './KitchenScreen';
 import { ReceiptShare } from './ReceiptShare';
@@ -50,7 +52,7 @@ import { currency, formatOrderCode, moneyInputValue, parseMoney, paymentLabels, 
 import { db, deleteProduct, nextOrderNumber, readCachedHeading, readCachedOrderNumbers, readCachedPoints, readDevicePoint, refreshHeading, refreshMenu, refreshOrderNumbers, refreshPoints, resizeImage, saveHeading, saveProduct, setProductImage, storeDevicePoint, syncQueue } from './db';
 import type { CartItem, LocalSale, LocalShift, PaymentMethod, PointOfSale, PosHeading, Product } from './types';
 
-type Screen = 'pos' | 'history' | 'menu' | 'kitchen' | 'reports' | 'inventory' | 'recipes' | 'suppliers' | 'equipment' | 'points';
+type Screen = 'pos' | 'history' | 'menu' | 'kitchen' | 'reports' | 'inventory' | 'recipes' | 'suppliers' | 'equipment' | 'points' | 'portal';
 type Dialog = 'open' | 'close' | 'checkout' | 'receipt' | 'product' | 'heading' | 'point' | null;
 
 interface ProductDraft {
@@ -76,6 +78,7 @@ const screenTitles: Record<Screen, string> = {
   suppliers: 'Proveedores',
   equipment: 'Equipos',
   points: 'Puntos de venta',
+  portal: 'Portal de pedidos',
 };
 
 const adminScreens: Array<{ screen: Screen; icon: typeof Package }> = [
@@ -85,6 +88,7 @@ const adminScreens: Array<{ screen: Screen; icon: typeof Package }> = [
   { screen: 'suppliers', icon: Handshake },
   { screen: 'equipment', icon: Wrench },
   { screen: 'points', icon: MonitorSmartphone },
+  { screen: 'portal', icon: Globe },
 ];
 
 const paymentIcons: Record<PaymentMethod, typeof CreditCard> = {
@@ -623,6 +627,7 @@ function App() {
             {activeScreen === 'recipes' && <RecipesAdmin pin={adminPin} menu={menu} onProductSaved={(saved) => setMenu((items) => items.map((item) => (item.id === saved.id ? saved : item)))} onProductDeleted={removeProduct} onToast={setToast} />}
             {activeScreen === 'suppliers' && <SuppliersAdmin pin={adminPin} onToast={setToast} />}
             {activeScreen === 'equipment' && <EquipmentAdmin pin={adminPin} onToast={setToast} />}
+            {activeScreen === 'portal' && <PortalAdmin pin={adminPin} onToast={setToast} />}
             {activeScreen === 'points' && <PointsAdmin pin={adminPin} points={points} devicePointId={devicePoint?.id ?? null} onSaved={savePoint} />}
           </AdminGate>
         ) : (

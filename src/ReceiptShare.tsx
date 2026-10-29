@@ -4,23 +4,12 @@ import qrcode from 'qrcode-generator';
 import { currency, paymentLabels } from './data';
 import type { LocalSale } from './types';
 
-/** Convierte un celular argentino al formato de WhatsApp (549 + área + número). Vacío = elegir el contacto en WhatsApp. */
+/** Convierte un celular al formato de WhatsApp. En Brasil: código de país 55 + área (DDD) + número. Vacío = elegir el contacto en WhatsApp. */
 export function whatsappNumber(input: string): string {
-  let digits = input.replace(/\D/g, '');
+  const digits = input.replace(/\D/g, '').replace(/^0+/, '');
   if (!digits) return '';
-  if (digits.startsWith('549')) return digits;
-  if (digits.startsWith('54')) digits = digits.slice(2);
-  digits = digits.replace(/^0/, '');
-  // "11 15 2345 6789" → quita el 15 que va después del código de área (área de 2 a 4 dígitos).
-  if (digits.length === 12) {
-    for (const areaLength of [2, 3, 4]) {
-      if (digits.slice(areaLength, areaLength + 2) === '15') {
-        digits = digits.slice(0, areaLength) + digits.slice(areaLength + 2);
-        break;
-      }
-    }
-  }
-  return `549${digits}`;
+  // Hasta 11 dígitos es un número local (DDD + celular); con más ya trae el código de país.
+  return digits.length <= 11 ? `55${digits}` : digits;
 }
 
 export function ticketUrl(sale: LocalSale): string {

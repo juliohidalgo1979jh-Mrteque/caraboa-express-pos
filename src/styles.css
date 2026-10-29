@@ -483,3 +483,48 @@ div.modal-copy p { margin: 0 0 8px; }
 .brand-mark.has-logo { width: 56px; height: 56px; }
 .receipt-brand-mark.has-logo { width: 56px; height: 56px; }
 .brand-mark.has-logo img, .receipt-brand-mark.has-logo img { width: 100%; height: 100%; object-fit: contain; transform: none; }
+
+/* Portal de pedidos (administración) */
+.portal-toolbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 12px; }
+.portal-toolbar .heading-sub { margin: 0; max-width: 560px; }
+.portal-help { margin: 0 0 12px; max-width: 680px; line-height: 1.5; }
+.portal-orders { display: grid; grid-template-columns: repeat(auto-fill, minmax(290px, 1fr)); gap: 12px; }
+.portal-order { display: grid; gap: 8px; padding: 14px; border: 1px solid var(--line); border-radius: 8px; background: #fffefa; font-size: 12px; }
+.portal-order.status-nuevo { border-color: var(--orange); box-shadow: 0 0 0 2px #e65d3522; }
+.portal-order.status-cancelado { opacity: .6; }
+.portal-order header, .portal-order footer { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
+.portal-order header div { display: grid; gap: 2px; }
+.portal-order header strong { font-family: 'Space Grotesk', sans-serif; font-size: 16px; }
+.portal-order small { color: #85867e; font-size: 10px; }
+.portal-order p { margin: 0; line-height: 1.4; }
+.portal-order a { color: var(--green); font-weight: 700; text-decoration: none; }
+.portal-order ul { display: grid; gap: 3px; margin: 0; padding: 8px 0; border-top: 1px dashed var(--line); border-bottom: 1px dashed var(--line); list-style: none; }
+.portal-order li { display: flex; justify-content: space-between; gap: 8px; }
+.order-notes { padding: 6px 8px; border-radius: 5px; background: #fff7e0; }
+.order-status { padding: 4px 8px; border-radius: 4px; background: #eceae2; color: #555750; font-size: 10px; font-weight: 700; }
+.order-status.nuevo { background: #fff1e9; color: #bf603c; }
+.order-status.confirmado, .order-status.listo { background: #e8f0f6; color: #3f6685; }
+.order-status.entregado { background: #edf4e9; color: #5b7d51; }
+.order-total { display: grid; gap: 2px; }
+.order-total strong { font-family: 'Space Grotesk', sans-serif; font-size: 17px; }
+.order-actions { display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; }
+.order-actions .modal-primary, .order-actions .secondary-button { width: auto; min-height: 34px; margin: 0; padding: 0 12px; font-size: 10px; }
+.portal-texts { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 12px; }
+.portal-text-card { display: grid; gap: 2px; padding: 14px; border: 1px solid var(--line); border-radius: 8px; background: #fffefa; }
+.portal-text-card header { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin-bottom: 4px; }
+.portal-text-card header small { color: #85867e; font-size: 10px; }
+.portal-text-card .field-label { display: grid; gap: 5px; margin: 8px 0 0; }
+.portal-text-card .text-input { height: 38px; font-size: 12px; }
+.portal-text-card > .secondary-button { justify-self: start; margin-top: 10px; }
+.portal-settings { display: grid; gap: 14px; max-width: 720px; }
+.portal-link-card { align-items: flex-start; }
+.portal-link-card > div:first-child { min-width: 0; }
+.portal-link { overflow-wrap: anywhere; color: var(--ink); font-family: 'Space Grotesk', sans-serif; font-size: 15px; font-weight: 600; }
+.portal-link-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.portal-link-actions .secondary-button { text-decoration: none; }
+.portal-form { display: grid; gap: 4px; }
+.portal-form .modal-primary { width: auto; justify-self: start; padding: 0 22px; }
+@media (max-width: 720px) { .portal-link-card { flex-direction: column; } .portal-texts { grid-template-columns: 1fr; } }
+.portal-text-card { grid-template-columns: minmax(0, 1fr); }
+.portal-text-card .field-label { grid-template-columns: minmax(0, 1fr); }
+.portal-text-card .product-form-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }

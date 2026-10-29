@@ -172,3 +172,65 @@ class Equipment(Base):
     purchase_date: Mapped[date | None] = mapped_column("fecha_compra", Date)
     value: Mapped[Decimal | None] = mapped_column("valor", Numeric(12, 2))
     notes: Mapped[str] = mapped_column("notas", String(300), default="", nullable=False)
+
+
+class ProductText(Base):
+    """Nombre y descripción de un producto en un idioma del portal (es, pt, en). El nombre en español vive en Product."""
+
+    __tablename__ = "producto_textos"
+
+    product_id: Mapped[int] = mapped_column("producto_id", ForeignKey("productos.id", ondelete="CASCADE"), primary_key=True)
+    lang: Mapped[str] = mapped_column("idioma", String(2), primary_key=True)
+    name: Mapped[str] = mapped_column("nombre", String(100), default="", nullable=False)
+    description: Mapped[str] = mapped_column("descripcion", String(300), default="", nullable=False)
+
+
+class Promotion(Base):
+    """INFO = solo se muestra; PERCENT = % de descuento automático; PERCENT_FIRST = % solo en el primer pedido del cliente."""
+
+    __tablename__ = "promociones"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    kind: Mapped[str] = mapped_column("tipo", String(20), nullable=False)
+    percent: Mapped[Decimal] = mapped_column("porcentaje", Numeric(5, 2), default=Decimal("0"), nullable=False)
+    min_total: Mapped[Decimal] = mapped_column("minimo", Numeric(10, 2), default=Decimal("0"), nullable=False)
+    valid_until: Mapped[date | None] = mapped_column("vence", Date)
+    is_active: Mapped[bool] = mapped_column("es_activa", Boolean, default=True, nullable=False)
+    title_es: Mapped[str] = mapped_column("titulo_es", String(80), default="", nullable=False)
+    title_pt: Mapped[str] = mapped_column("titulo_pt", String(80), default="", nullable=False)
+    title_en: Mapped[str] = mapped_column("titulo_en", String(80), default="", nullable=False)
+    text_es: Mapped[str] = mapped_column("texto_es", String(200), default="", nullable=False)
+    text_pt: Mapped[str] = mapped_column("texto_pt", String(200), default="", nullable=False)
+    text_en: Mapped[str] = mapped_column("texto_en", String(200), default="", nullable=False)
+
+
+class OnlineOrder(Base):
+    __tablename__ = "pedidos_online"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    code: Mapped[str] = mapped_column("codigo", String(12), default="", nullable=False)
+    customer_name: Mapped[str] = mapped_column("cliente", String(80), nullable=False)
+    phone: Mapped[str] = mapped_column("telefono", String(20), nullable=False)
+    phone_key: Mapped[str] = mapped_column("telefono_clave", String(9), nullable=False, index=True)
+    fulfillment: Mapped[str] = mapped_column("entrega", String(10), nullable=False)
+    address: Mapped[str] = mapped_column("direccion", String(200), default="", nullable=False)
+    notes: Mapped[str] = mapped_column("notas", String(300), default="", nullable=False)
+    lang: Mapped[str] = mapped_column("idioma", String(2), default="es", nullable=False)
+    subtotal: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
+    discount: Mapped[Decimal] = mapped_column("descuento", Numeric(10, 2), default=Decimal("0"), nullable=False)
+    promo_title: Mapped[str] = mapped_column("promocion", String(80), default="", nullable=False)
+    total: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
+    status: Mapped[str] = mapped_column("estado", String(12), default="NUEVO", nullable=False)
+    created_at: Mapped[datetime] = mapped_column("creado_en", DateTime, nullable=False)
+
+
+class OnlineOrderItem(Base):
+    __tablename__ = "pedidos_online_items"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    order_id: Mapped[int] = mapped_column("pedido_id", ForeignKey("pedidos_online.id", ondelete="CASCADE"), nullable=False)
+    product_id: Mapped[int] = mapped_column(ForeignKey("productos.id"), nullable=False)
+    name: Mapped[str] = mapped_column("nombre", String(100), nullable=False)
+    quantity: Mapped[int] = mapped_column("cantidad", Integer, nullable=False)
+    unit_price: Mapped[Decimal] = mapped_column("precio_unitario", Numeric(10, 2), nullable=False)
+    subtotal: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
