@@ -110,7 +110,7 @@ def register_point_routes(app: FastAPI, get_db: Callable[..., Any], require_admi
 
     @app.get("/api/order-numbers")
     def last_order_numbers(day: str = Query(alias="date"), session: Session = Depends(get_db)) -> dict[str, int]:
-        """Último número de pedido de cada punto en un día (hora de Argentina), para que un dispositivo que perdió sus datos no repita."""
+        """Último número de pedido de cada punto en un día (hora de Santa Catarina), para que un dispositivo que perdió sus datos no repita."""
         try:
             start, end = day_bounds(date.fromisoformat(day))
         except ValueError as error:

@@ -43,7 +43,7 @@ export function ReportsAdmin({ pin, points }: { pin: string; points: PointOfSale
 
   return (
     <section className="history-page menu-page">
-      <div className="page-heading"><div><p className="eyebrow">ADMINISTRACIÓN <span>·</span> REPORTES</p><h1>Reportes de ventas</h1><p className="heading-sub">Ventas por día, por turno y por punto de venta, en horario de Argentina. Incluye las ventas ya sincronizadas.</p></div>
+      <div className="page-heading"><div><p className="eyebrow">ADMINISTRACIÓN <span>·</span> REPORTES</p><h1>Reportes de ventas</h1><p className="heading-sub">Ventas por día, por turno y por punto de venta, en horario de Santa Catarina. Incluye las ventas ya sincronizadas.</p></div>
         <button className="modal-primary menu-new-button" disabled={downloading !== null} onClick={() => void download(`/api/reports/daily.pdf?${query}`, `ventas-${day}.pdf`, 'day')}><FileDown size={16} /> {downloading === 'day' ? 'Generando…' : 'PDF del día'}</button></div>
 
       <div className="report-filters">
