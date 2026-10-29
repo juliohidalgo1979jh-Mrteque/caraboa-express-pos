@@ -47,7 +47,7 @@ export function receiptHtml(sale: LocalSale): string {
   const when = new Intl.DateTimeFormat('es-AR', { dateStyle: 'short', timeStyle: 'short', timeZone: 'America/Argentina/Buenos_Aires' }).format(new Date(sale.createdAt));
   const body = `
     <div class="page">
-      <div class="center brand">Tequeños Club</div>
+      <div class="center brand">Caraboa Express</div>
       <div class="center muted">${escapeHtml(when)}${sale.pointName ? ` · ${escapeHtml(sale.pointName)}` : ''}</div>
       ${sale.orderCode ? `<div class="center muted">PEDIDO</div><div class="center code">${escapeHtml(sale.orderCode)}</div>` : ''}
       <hr>

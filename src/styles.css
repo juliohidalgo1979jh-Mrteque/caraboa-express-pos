@@ -478,3 +478,8 @@ div.modal-copy p { margin: 0 0 8px; }
   .receipt-backdrop, .receipt-modal { position: static; display: block; width: auto; padding: 0; overflow: visible; max-height: none; border: 0; background: white; box-shadow: none; }
   .receipt-actions, .receipt-buttons { display: none !important; }
 }
+/* Logo del negocio en el encabezado y en el ticket */
+.brand-mark.has-logo, .receipt-brand-mark.has-logo { background: none; transform: none; border-radius: 50%; overflow: hidden; }
+.brand-mark.has-logo { width: 44px; height: 44px; }
+.receipt-brand-mark.has-logo { width: 52px; height: 52px; }
+.brand-mark.has-logo img, .receipt-brand-mark.has-logo img { width: 100%; height: 100%; object-fit: cover; transform: none; }

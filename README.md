@@ -1,4 +1,4 @@
-# Tequeños Club POS
+# Caraboa Express POS
 
 Punto de venta para food truck: carta táctil con fotos, pedidos, cobros por punto de venta (efectivo, tarjeta, QR, transferencia, Mercado Pago), propinas, arqueo de caja y tickets. Incluye inventario de productos e insumos con recetas y costos, proveedores, equipos y reportes PDF. Las ventas se guardan primero en el dispositivo (IndexedDB) y se sincronizan al recuperar conexión; la PWA abre sin conexión.
 

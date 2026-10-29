@@ -92,7 +92,7 @@ def register_kitchen_routes(app: FastAPI, get_db: Callable[..., Any]) -> None:
         sale = session.scalar(select(Sale).where(Sale.uuid_local == sale_uuid)) if len(sale_uuid) <= 36 else None
         if sale is None:
             # El celular puede haber cobrado sin conexión: el ticket aparece cuando sincroniza.
-            return ticket_page("Ticket no disponible", "<h1>Tequeños Club</h1><p class='muted'>Tu ticket todavía no está disponible. "
+            return ticket_page("Ticket no disponible", "<h1>Caraboa Express</h1><p class='muted'>Tu ticket todavía no está disponible. "
                                "Vuelve a abrir este enlace en unos minutos.</p>")
         point = session.get(PointOfSale, sale.point_id) if sale.point_id else None
         rows = "".join(
@@ -102,11 +102,11 @@ def register_kitchen_routes(app: FastAPI, get_db: Callable[..., Any]) -> None:
         order = f"<div class='order'><small>PEDIDO</small><strong>{escape(sale.order_code)}</strong></div>" if sale.order_code else ""
         tip = f"<div class='row'><span>Propina</span><span>{ars(sale.tip)}</span></div>" if sale.tip else ""
         body = (
-            f"<h1>Tequeños Club</h1><p class='muted'>{to_local(sale.created_at).strftime('%d/%m/%Y %H:%M')}"
+            f"<h1>Caraboa Express</h1><p class='muted'>{to_local(sale.created_at).strftime('%d/%m/%Y %H:%M')}"
             f"{' · ' + escape(point.name) if point else ''}</p>{order}<hr>{rows}<hr>"
             f"<div class='row'><span>Subtotal</span><span>{ars(sale.subtotal)}</span></div>{tip}"
             f"<div class='row total'><span>Total</span><span>{ars(sale.total)}</span></div>"
             f"<p class='muted'>Pago: {escape(METHOD_LABELS.get(sale.payment_method, sale.payment_method))}</p>"
             "<p class='thanks'>¡Gracias por comer rico!</p><p class='muted'>Documento no válido como factura.</p>"
         )
-        return ticket_page(f"Ticket {sale.order_code or ''} · Tequeños Club", body)
+        return ticket_page(f"Ticket {sale.order_code or ''} · Caraboa Express", body)

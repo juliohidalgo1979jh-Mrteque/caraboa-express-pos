@@ -1,4 +1,4 @@
-const CACHE_NAME = 'tequenos-pos-v1';
+const CACHE_NAME = 'caraboa-pos-v1';
 
 self.addEventListener('install', (event) => {
   event.waitUntil((async () => {
@@ -7,7 +7,7 @@ self.addEventListener('install', (event) => {
     await cache.put('/', response.clone());
     const html = await response.text();
     const assets = [...html.matchAll(/(?:src|href)="([^"]+\.(?:js|css))"/g)].map((match) => match[1]);
-    await cache.addAll(['/manifest.webmanifest', '/icon.svg', ...assets]);
+    await cache.addAll(['/manifest.webmanifest', '/logo.png', '/icon-192.png', ...assets]);
   })());
   self.skipWaiting();
 });

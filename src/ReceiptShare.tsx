@@ -30,7 +30,7 @@ export function ticketUrl(sale: LocalSale): string {
 export function ticketText(sale: LocalSale): string {
   const when = new Intl.DateTimeFormat('es-AR', { dateStyle: 'short', timeStyle: 'short', timeZone: 'America/Argentina/Buenos_Aires' }).format(new Date(sale.createdAt));
   return [
-    '*Tequeños Club*',
+    '*Caraboa Express*',
     `${sale.orderCode ? `Pedido *${sale.orderCode}* · ` : ''}${when}`,
     '',
     ...sale.items.map((item) => `${item.quantity} × ${item.name}: ${currency.format(item.subtotal)}`),

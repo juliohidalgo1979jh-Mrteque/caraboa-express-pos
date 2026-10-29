@@ -30,7 +30,7 @@ import {
   ShoppingBag,
   Smartphone,
   Trash2,
-  UtensilsCrossed,
+  
   Wallet,
   Wrench,
   X,
@@ -513,9 +513,9 @@ function App() {
   return (
     <div className="app-shell">
       <aside className="sidebar">
-        <a className="brand" href="#pos" onClick={() => setActiveScreen('pos')} aria-label="Tequeños Club, inicio">
-          <span className="brand-mark"><UtensilsCrossed size={21} strokeWidth={2.2} /></span>
-          <span className="brand-copy"><strong>tequeños club</strong><small>food truck · POS</small></span>
+        <a className="brand" href="#pos" onClick={() => setActiveScreen('pos')} aria-label="Caraboa Express, inicio">
+          <span className="brand-mark has-logo"><img src="/logo.png" alt="" /></span>
+          <span className="brand-copy"><strong>caraboa express</strong><small>food truck · POS</small></span>
         </a>
 
         <div className="sidebar-section-label">OPERACIÓN</div>
@@ -554,13 +554,13 @@ function App() {
             <div><strong>{isOnline ? 'En línea' : 'Modo sin conexión'}</strong><small>{pendingCount ? `${pendingCount} por sincronizar` : 'Datos guardados localmente'}</small></div>
             <span className={`connection-pip ${isOnline ? 'online' : ''}`} />
           </div>
-          <div className="user-row"><span className="avatar">TC</span><span><strong>Tequeños Club</strong><small>{devicePoint?.name ?? 'Sin punto asignado'}</small></span><button aria-label="Cambiar punto de venta de este dispositivo" title="Cambiar punto de venta" className="user-more" onClick={() => { if (activeShift) setToast('Cierra el turno para cambiar el punto de venta.'); else setActiveDialog('point'); }}>···</button></div>
+          <div className="user-row"><span className="avatar">CE</span><span><strong>Caraboa Express</strong><small>{devicePoint?.name ?? 'Sin punto asignado'}</small></span><button aria-label="Cambiar punto de venta de este dispositivo" title="Cambiar punto de venta" className="user-more" onClick={() => { if (activeShift) setToast('Cierra el turno para cambiar el punto de venta.'); else setActiveDialog('point'); }}>···</button></div>
         </div>
       </aside>
 
       <main className="workspace">
         <header className="topbar">
-          <div className="breadcrumb"><span>Tequeños Club</span><ArrowRight size={14} /><strong>{screenTitles[activeScreen]}</strong></div>
+          <div className="breadcrumb"><span>Caraboa Express</span><ArrowRight size={14} /><strong>{screenTitles[activeScreen]}</strong></div>
           <div className="topbar-right"><span className="date-label"><Clock3 size={15} />{dateLabel}</span><span className="topbar-divider" /><span className="live-indicator"><i />{activeShift ? 'Turno activo' : 'Sin turno'}</span></div>
         </header>
 
@@ -715,7 +715,7 @@ function App() {
           <button className="modal-primary" onClick={() => void closeShift()} disabled={!(parseMoney(closingCash) >= 0)}>Cerrar turno <CheckCircle2 size={18} /></button>
         </section>}
 
-        {activeDialog === 'receipt' && lastSale && <section className="receipt-modal" role="dialog" aria-modal="true" aria-labelledby="receipt-title"><div className="receipt-actions"><span className="saved-badge"><CheckCircle2 size={15} /> Venta guardada</span><button className="icon-button" onClick={() => setActiveDialog(null)} aria-label="Cerrar ticket"><X size={18} /></button></div><div className="receipt-paper"><div className="receipt-brand"><span className="receipt-brand-mark"><UtensilsCrossed size={18} /></span><strong>tequeños club</strong><small>FOOD TRUCK · PUNTO DE VENTA</small></div>{lastSale.orderCode && <div className="receipt-order"><small>PEDIDO</small><strong>{lastSale.orderCode}</strong></div>}<div className="receipt-divider" /><div className="receipt-meta"><span>{lastSale.orderCode ? <>Pedido <strong>{lastSale.orderCode}</strong></> : <>Ticket <strong>#{lastSale.id.slice(0, 6).toUpperCase()}</strong></>}</span><span>{new Intl.DateTimeFormat('es', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(lastSale.createdAt))}</span></div><div className="receipt-items">{lastSale.items.map((item, index) => <div key={`${item.productId}-${index}`}><span>{item.quantity} × {item.name}</span><strong>{currency.format(item.subtotal)}</strong></div>)}</div><div className="receipt-divider" /><div className="receipt-subtotals"><div><span>Subtotal</span><strong>{currency.format(lastSale.subtotal)}</strong></div><div><span>Propina</span><strong>{currency.format(lastSale.tip)}</strong></div></div><div className="receipt-total"><span>TOTAL</span><strong>{currency.format(lastSale.total)}</strong></div><div className="receipt-payment"><span>Pago · {paymentLabels[lastSale.paymentMethod] ?? lastSale.paymentMethod}</span>{lastSale.pointName && <span>Punto · {lastSale.pointName}</span>}{lastSale.paymentMethod === 'EFECTIVO' && <><span>Recibido · {currency.format(lastSale.amountReceived)}</span><span>Cambio · {currency.format(lastSale.changeGiven)}</span></>}</div><div className="receipt-thanks">¡Gracias por comer rico!<small>Hecho con cariño en Tequeños Club</small></div></div><ReceiptShare sale={lastSale} /><div className="receipt-buttons"><button className="secondary-button" onClick={() => void printHtml(receiptHtml(lastSale))}><Printer size={16} /> Imprimir ticket</button><button className="modal-primary" onClick={() => { setActiveDialog(null); setActiveScreen('pos'); }}><Coffee size={17} /> Nuevo pedido</button></div></section>}
+        {activeDialog === 'receipt' && lastSale && <section className="receipt-modal" role="dialog" aria-modal="true" aria-labelledby="receipt-title"><div className="receipt-actions"><span className="saved-badge"><CheckCircle2 size={15} /> Venta guardada</span><button className="icon-button" onClick={() => setActiveDialog(null)} aria-label="Cerrar ticket"><X size={18} /></button></div><div className="receipt-paper"><div className="receipt-brand"><span className="receipt-brand-mark has-logo"><img src="/logo.png" alt="" /></span><strong>caraboa express</strong><small>FOOD TRUCK · PUNTO DE VENTA</small></div>{lastSale.orderCode && <div className="receipt-order"><small>PEDIDO</small><strong>{lastSale.orderCode}</strong></div>}<div className="receipt-divider" /><div className="receipt-meta"><span>{lastSale.orderCode ? <>Pedido <strong>{lastSale.orderCode}</strong></> : <>Ticket <strong>#{lastSale.id.slice(0, 6).toUpperCase()}</strong></>}</span><span>{new Intl.DateTimeFormat('es', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(lastSale.createdAt))}</span></div><div className="receipt-items">{lastSale.items.map((item, index) => <div key={`${item.productId}-${index}`}><span>{item.quantity} × {item.name}</span><strong>{currency.format(item.subtotal)}</strong></div>)}</div><div className="receipt-divider" /><div className="receipt-subtotals"><div><span>Subtotal</span><strong>{currency.format(lastSale.subtotal)}</strong></div><div><span>Propina</span><strong>{currency.format(lastSale.tip)}</strong></div></div><div className="receipt-total"><span>TOTAL</span><strong>{currency.format(lastSale.total)}</strong></div><div className="receipt-payment"><span>Pago · {paymentLabels[lastSale.paymentMethod] ?? lastSale.paymentMethod}</span>{lastSale.pointName && <span>Punto · {lastSale.pointName}</span>}{lastSale.paymentMethod === 'EFECTIVO' && <><span>Recibido · {currency.format(lastSale.amountReceived)}</span><span>Cambio · {currency.format(lastSale.changeGiven)}</span></>}</div><div className="receipt-thanks">¡Gracias por comer rico!<small>Hecho con cariño en Caraboa Express</small></div></div><ReceiptShare sale={lastSale} /><div className="receipt-buttons"><button className="secondary-button" onClick={() => void printHtml(receiptHtml(lastSale))}><Printer size={16} /> Imprimir ticket</button><button className="modal-primary" onClick={() => { setActiveDialog(null); setActiveScreen('pos'); }}><Coffee size={17} /> Nuevo pedido</button></div></section>}
       </div>}
 
       {activeShift && <button className="close-shift-button" onClick={() => { setClosingCash(''); setActiveDialog('close'); }}><Wallet size={16} /> Cerrar turno</button>}

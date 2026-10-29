@@ -125,7 +125,7 @@ def build_report(session: Session, sales: list[Sale], shifts: list[Shift]) -> di
 def render_pdf(title: str, subtitle: str, report: dict[str, Any]) -> bytes:
     buffer = BytesIO()
     document = SimpleDocTemplate(buffer, pagesize=A4, leftMargin=16 * mm, rightMargin=16 * mm, topMargin=16 * mm, bottomMargin=16 * mm,
-                                 title=title, author="Tequeños Club")
+                                 title=title, author="Caraboa Express")
     styles = getSampleStyleSheet()
     orange = colors.HexColor("#df5b35")
     h1 = ParagraphStyle("h1", parent=styles["Title"], alignment=0, fontSize=18, spaceAfter=2)
@@ -151,7 +151,7 @@ def render_pdf(title: str, subtitle: str, report: dict[str, Any]) -> bytes:
         return result
 
     story: list[Any] = [
-        Paragraph("Tequeños Club", ParagraphStyle("brand", parent=small, textColor=orange, fontName="Helvetica-Bold")),
+        Paragraph("Caraboa Express", ParagraphStyle("brand", parent=small, textColor=orange, fontName="Helvetica-Bold")),
         Paragraph(title, h1), Paragraph(subtitle, small),
         Paragraph(f"Generado el {datetime.now(LOCAL_TZ).strftime('%d/%m/%Y %H:%M')} · Incluye las ventas ya sincronizadas con el servidor.", small),
         Spacer(1, 6 * mm),
