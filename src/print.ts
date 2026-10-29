@@ -44,7 +44,7 @@ export function comandasHtml(comandas: Comanda[]): string {
 
 /** Ticket del cliente en 80 mm. */
 export function receiptHtml(sale: LocalSale): string {
-  const when = new Intl.DateTimeFormat('es-AR', { dateStyle: 'short', timeStyle: 'short', timeZone: 'America/Argentina/Buenos_Aires' }).format(new Date(sale.createdAt));
+  const when = new Intl.DateTimeFormat('es-AR', { dateStyle: 'short', timeStyle: 'short', timeZone: 'America/Sao_Paulo' }).format(new Date(sale.createdAt));
   const body = `
     <div class="page">
       <div class="center brand">Caraboa Express</div>

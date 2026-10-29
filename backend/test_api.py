@@ -245,10 +245,10 @@ def test_menu_is_editable_with_admin_pin(tmp_path):
     app = create_app(f"sqlite:///{tmp_path / 'test.db'}", admin_pin="1234")
     with TestClient(app) as client:
         menu = client.get("/api/products").json()
-        assert len(menu) == 12
+        assert len(menu) == 10
         assert menu[0] == {
-            "id": 1, "name": "Arepa Pabellón", "category": "Arepas", "price": 9.5,
-            "symbol": "◉", "tone": "gold", "active": True, "image": None,
+            "id": 1, "name": "Pizza Margarita 25 cm", "category": "Pizzas", "price": 25,
+            "symbol": "◉", "tone": "coral", "active": True, "image": None,
         }
 
         new_product = {"name": "Tequeños de guayaba", "category": "Tequeños", "price": 7.25, "symbol": "▰", "tone": "pink"}
@@ -258,11 +258,11 @@ def test_menu_is_editable_with_admin_pin(tmp_path):
 
         created = client.post("/api/products", json=new_product, headers={"X-Admin-Pin": "1234"})
         assert created.status_code == 201
-        assert created.json()["id"] == 13
+        assert created.json()["id"] == 11
         assert created.json()["category"] == "Tequeños"
 
         edited = {**new_product, "name": "Tequeños de guayaba (6)", "price": 8, "active": False}
-        response = client.put("/api/products/13", json=edited, headers={"X-Admin-Pin": "1234"})
+        response = client.put("/api/products/11", json=edited, headers={"X-Admin-Pin": "1234"})
         assert response.status_code == 200
         assert response.json()["price"] == 8.0
         assert response.json()["active"] is False
@@ -301,7 +301,7 @@ def test_pos_heading_is_editable_with_admin_pin(tmp_path):
     app = create_app(f"sqlite:///{tmp_path / 'test.db'}", admin_pin="1234")
     with TestClient(app) as client:
         assert client.get("/api/settings/heading").json() == {
-            "tagline": "MARTES DE ANTOJO",
+            "tagline": "CARABOA EXPRESS",
             "label": "CARTA DEL DÍA",
             "title": "¿Qué servimos?",
             "subtitle": "Toca un producto para sumarlo al pedido.",
@@ -404,25 +404,25 @@ def test_inventory_recipes_costs_and_stock_deduction(tmp_path):
         client.post("/api/stock-movements", json={"itemId": salsa["id"], "kind": "COMPRA", "quantity": 2}, headers=pin)
         assert client.post("/api/stock-movements", json={"itemId": caja["id"], "kind": "COMPRA", "quantity": 0}, headers=pin).status_code == 422
 
-        # Receta de "Tequeños (5)" (producto 5): 5 tequeños + 1 caja + 0,03 l de salsa.
-        recipe = client.put("/api/products/5/recipe", json={"margin": 60, "lines": [
+        # Receta de "Tequeños (10 unidades)" (producto 5): 5 tequeños + 1 caja + 0,03 l de salsa.
+        recipe = client.put("/api/products/10/recipe", json={"margin": 60, "lines": [
             {"itemId": tequenos["id"], "quantity": 5},
             {"itemId": caja["id"], "quantity": 1},
             {"itemId": salsa["id"], "quantity": 0.03},
         ]}, headers=pin).json()
         assert recipe["cost"] == 710.0  # 500 + 90 + 120
         assert recipe["suggestedPrice"] == 1140.0  # 710 × 1,6 = 1136 → redondeado a $10
-        dup = client.put("/api/products/5/recipe", json={"lines": [{"itemId": caja["id"], "quantity": 1}, {"itemId": caja["id"], "quantity": 2}]}, headers=pin)
+        dup = client.put("/api/products/10/recipe", json={"lines": [{"itemId": caja["id"], "quantity": 1}, {"itemId": caja["id"], "quantity": 2}]}, headers=pin)
         assert dup.status_code == 422
         costs = {row["productId"]: row for row in client.get("/api/menu-costs", headers=pin).json()}
-        assert costs[5]["cost"] == 710.0 and costs[1]["lines"] == []
+        assert costs[10]["cost"] == 710.0 and costs[1]["lines"] == []
 
         # Una venta de 2 unidades descuenta 10 tequeños, 2 cajas y 0,06 l de salsa.
         now = datetime.now(timezone.utc).isoformat()
         client.post("/api/sync", json={"type": "shift.open", "clientId": "s-inv", "payload": {"openingCash": 0, "openedAt": now}})
         sale = {"type": "sale.create", "clientId": "v-inv", "payload": {
             "turno_local_id": "s-inv", "subtotal": 13, "propina": 0, "total": 13, "metodo_pago": "EFECTIVO", "creado_en": now,
-            "detalles": [{"productId": 5, "name": "Tequeños (5)", "quantity": 2, "price": 6.5}],
+            "detalles": [{"productId": 10, "name": "Tequeños (10 unidades)", "quantity": 2, "price": 6.5}],
         }}
         assert client.post("/api/sync", json=sale).status_code == 200
         assert client.post("/api/sync", json=sale).json()["duplicate"] is True  # no descuenta dos veces
@@ -454,17 +454,17 @@ def test_daily_and_shift_reports_by_point(tmp_path):
     with TestClient(app) as client:
         laptop, phone = client.get("/api/points").json()
         item = client.post("/api/stock-items", json={"kind": "PRODUCTO", "name": "Tequeño", "unit": "unid", "unitCost": 100, "initialStock": 100}, headers=pin).json()
-        client.put("/api/products/5/recipe", json={"lines": [{"itemId": item["id"], "quantity": 5}]}, headers=pin)
+        client.put("/api/products/10/recipe", json={"lines": [{"itemId": item["id"], "quantity": 5}]}, headers=pin)
 
         def sync(kind, client_id, payload):
             assert client.post("/api/sync", json={"type": kind, "clientId": client_id, "payload": payload}).status_code == 200
 
-        # 27/10 en Argentina (UTC-3): 13:00 local = 16:00 UTC.
+        # 27/10 en Santa Catarina (UTC-3): 13:00 local = 16:00 UTC.
         sync("shift.open", "t-laptop", {"openingCash": 1000, "openedAt": "2026-10-27T16:00:00Z", "pointId": laptop["id"]})
         sync("shift.open", "t-phone", {"openingCash": 0, "openedAt": "2026-10-27T16:05:00Z", "pointId": phone["id"]})
         sale = lambda shift, method, qty, when, tip=0: {
             "turno_local_id": shift, "subtotal": 6.5 * qty, "propina": tip, "total": 6.5 * qty + tip, "metodo_pago": method, "creado_en": when,
-            "detalles": [{"productId": 5, "name": "Tequeños (5)", "quantity": qty, "price": 6.5}],
+            "detalles": [{"productId": 10, "name": "Tequeños (10 unidades)", "quantity": qty, "price": 6.5}],
         }
         sync("sale.create", "v1", sale("t-laptop", "EFECTIVO", 2, "2026-10-27T17:00:00Z", tip=1))
         sync("sale.create", "v2", sale("t-phone", "MERCADO_PAGO", 1, "2026-10-27T18:00:00Z"))
@@ -479,7 +479,7 @@ def test_daily_and_shift_reports_by_point(tmp_path):
         assert report["cost"] == 2000.0  # 4 porciones × 5 tequeños × $100
         assert {row["name"]: row["total"] for row in report["byPoint"]} == {"Laptop principal": 14.0, "Celular 1": 13.0}
         assert {row["name"]: row["count"] for row in report["byMethod"]} == {"Efectivo": 1, "Mercado Pago": 1, "Transferencia": 1}
-        assert report["products"] == [{"name": "Tequeños (5)", "quantity": 4, "total": 26.0}]
+        assert report["products"] == [{"name": "Tequeños (10 unidades)", "quantity": 4, "total": 26.0}]
         laptop_shift = next(row for row in report["shifts"] if row["point"] == "Laptop principal")
         assert laptop_shift["openedAt"] == "13:00" and laptop_shift["expectedCash"] == 1014.0 and laptop_shift["difference"] == -4.0
         assert [row["time"] for row in report["sales"]] == ["14:00", "15:00", "23:30"]
@@ -533,20 +533,20 @@ def test_delete_stock_item_and_supplier_keep_history(tmp_path):
         caja = client.post("/api/stock-items", json={"kind": "INSUMO", "name": "Caja", "unit": "unid", "unitCost": 80, "supplierId": supplier["id"]}, headers=pin).json()
         tequeno = client.post("/api/stock-items", json={"kind": "PRODUCTO", "name": "Tequeño", "unit": "unid", "unitCost": 100, "initialStock": 50}, headers=pin).json()
         client.post("/api/stock-movements", json={"itemId": caja["id"], "kind": "COMPRA", "quantity": 10, "supplierId": supplier["id"]}, headers=pin)
-        client.put("/api/products/5/recipe", json={"lines": [{"itemId": tequeno["id"], "quantity": 5}, {"itemId": caja["id"], "quantity": 1}]}, headers=pin)
+        client.put("/api/products/10/recipe", json={"lines": [{"itemId": tequeno["id"], "quantity": 5}, {"itemId": caja["id"], "quantity": 1}]}, headers=pin)
 
         assert client.get("/api/suppliers", headers=pin).json()[0]["itemCount"] == 1
-        assert {i["name"]: i["usedIn"] for i in client.get("/api/stock-items", headers=pin).json()} == {"Caja": ["Tequeños (5)"], "Tequeño": ["Tequeños (5)"]}
+        assert {i["name"]: i["usedIn"] for i in client.get("/api/stock-items", headers=pin).json()} == {"Caja": ["Tequeños (10 unidades)"], "Tequeño": ["Tequeños (10 unidades)"]}
 
         # Eliminar un insumo lo quita de las recetas (el costo baja) y conserva sus movimientos.
         assert client.delete(f"/api/stock-items/{caja['id']}").status_code == 401
-        assert client.delete(f"/api/stock-items/{caja['id']}", headers=pin).json() == {"ok": True, "removedFromRecipes": ["Tequeños (5)"]}
+        assert client.delete(f"/api/stock-items/{caja['id']}", headers=pin).json() == {"ok": True, "removedFromRecipes": ["Tequeños (10 unidades)"]}
         assert [i["name"] for i in client.get("/api/stock-items", headers=pin).json()] == ["Tequeño"]
-        assert client.get("/api/products/5/recipe", headers=pin).json()["cost"] == 500.0
+        assert client.get("/api/products/10/recipe", headers=pin).json()["cost"] == 500.0
         assert [m["itemName"] for m in client.get("/api/stock-movements", headers=pin).json()].count("Caja") == 1
         assert client.delete(f"/api/stock-items/{caja['id']}", headers=pin).status_code == 404
         assert client.post("/api/stock-movements", json={"itemId": caja["id"], "kind": "COMPRA", "quantity": 1}, headers=pin).status_code == 404
-        assert client.put("/api/products/5/recipe", json={"lines": [{"itemId": caja["id"], "quantity": 1}]}, headers=pin).status_code == 404
+        assert client.put("/api/products/10/recipe", json={"lines": [{"itemId": caja["id"], "quantity": 1}]}, headers=pin).status_code == 404
 
         # Eliminar un proveedor deja sus artículos sin proveedor y conserva las compras.
         client.put(f"/api/stock-items/{tequeno['id']}", json={"kind": "PRODUCTO", "name": "Tequeño", "unit": "unid", "unitCost": 100, "supplierId": supplier["id"]}, headers=pin)
@@ -614,7 +614,7 @@ def test_kitchen_comandas_print_once_and_public_ticket(tmp_path):
             return client.post("/api/sync", json={"type": "sale.create", "clientId": client_id, "payload": {
                 "turno_local_id": shift, "subtotal": 13, "propina": 0, "total": 13, "metodo_pago": "QR", "creado_en": now,
                 "numero_pedido": int(code[-3:]), "codigo_pedido": code,
-                "detalles": [{"productId": 5, "name": "Tequeños <5>", "quantity": 2, "price": 6.5}],
+                "detalles": [{"productId": 10, "name": "Tequeños <5>", "quantity": 2, "price": 6.5}],
             }})
 
         client.post("/api/sync", json={"type": "shift.open", "clientId": "s-k", "payload": {"openingCash": 0, "openedAt": now, "pointId": phone["id"]}})
@@ -641,5 +641,5 @@ def test_kitchen_comandas_print_once_and_public_ticket(tmp_path):
         ticket = client.get("/ticket/k1")
         assert ticket.status_code == 200 and "B-002" in ticket.text and "Celular 1" in ticket.text
         assert "Tequeños &lt;5&gt;" in ticket.text and "<5>" not in ticket.text  # escapado
-        assert "$ 13,00" in ticket.text
+        assert "R$ 13,00" in ticket.text
         assert "todavía no está disponible" in client.get("/ticket/no-existe").text

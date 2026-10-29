@@ -30,9 +30,9 @@ function storeConfig(config: StationConfig) {
 }
 
 export const sampleComanda: Comanda = {
-  id: 0, orderCode: 'A-000', point: 'Prueba', time: new Intl.DateTimeFormat('es-AR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Argentina/Buenos_Aires' }).format(new Date()),
+  id: 0, orderCode: 'A-000', point: 'Prueba', time: new Intl.DateTimeFormat('es-AR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo' }).format(new Date()),
   paymentMethod: 'Efectivo', total: 0, printedAt: null,
-  items: [{ name: 'Tequeños (5)', quantity: 2, unitPrice: 0, subtotal: 0 }, { name: 'Gaseosa', quantity: 1, unitPrice: 0, subtotal: 0 }],
+  items: [{ name: 'Pizza Calabresa 25 cm', quantity: 2, unitPrice: 0, subtotal: 0 }, { name: 'Hamburguesa especial', quantity: 1, unitPrice: 0, subtotal: 0 }],
 };
 
 /**

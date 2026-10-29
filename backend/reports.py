@@ -17,18 +17,18 @@ from sqlalchemy.orm import Session
 
 from .models import PointOfSale, Sale, SaleDetail, Shift, StockMovement
 
-LOCAL_TZ = ZoneInfo("America/Argentina/Buenos_Aires")
-METHOD_LABELS = {"EFECTIVO": "Efectivo", "TARJETA": "Tarjeta", "QR": "QR", "TRANSFERENCIA": "Transferencia", "MERCADO_PAGO": "Mercado Pago"}
+LOCAL_TZ = ZoneInfo("America/Sao_Paulo")
+METHOD_LABELS = {"EFECTIVO": "Efectivo", "TARJETA": "Tarjeta", "QR": "Pix / QR", "TRANSFERENCIA": "Transferencia", "MERCADO_PAGO": "Mercado Pago"}
 MONTHS = ("enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre")
 WEEKDAYS = ("lunes", "martes", "miércoles", "jueves", "viernes", "sábado", "domingo")
 ZERO = Decimal("0")
 
 
 def ars(amount: Decimal | float) -> str:
-    """$ 1.234,56"""
+    """R$ 1.234,56"""
     value = Decimal(amount)
     text = f"{abs(value):,.2f}".replace(",", "_").replace(".", ",").replace("_", ".")
-    return f"-$ {text}" if value < 0 else f"$ {text}"
+    return f"-R$ {text}" if value < 0 else f"R$ {text}"
 
 
 def to_local(value: datetime) -> datetime:

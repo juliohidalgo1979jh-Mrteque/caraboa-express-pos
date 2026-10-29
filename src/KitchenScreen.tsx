@@ -10,7 +10,7 @@ export function KitchenScreen({ station }: { station: KitchenStation }) {
     return () => window.clearInterval(interval);
   }, [refreshRecent]);
 
-  const since = station.since ? new Intl.DateTimeFormat('es-AR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Argentina/Buenos_Aires' }).format(new Date(station.since)) : '';
+  const since = station.since ? new Intl.DateTimeFormat('es-AR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo' }).format(new Date(station.since)) : '';
 
   return (
     <section className="history-page menu-page">

@@ -48,11 +48,11 @@ La API crea las tablas al iniciar si no existen. La base gratuita de Render cadu
 
 | Sección | Qué hace |
 | --- | --- |
-| **Punto de venta** | Cobra con los medios de pago habilitados para el punto del dispositivo. Importes en pesos argentinos (`$ 1.250,50`). |
+| **Punto de venta** | Cobra con los medios de pago habilitados para el punto del dispositivo. Importes en reales (`R$ 1.250,50`). |
 | **Comandas** | La laptop con la impresora térmica activa la estación e imprime sola (80 mm) la comanda de cada pedido nuevo de todos los puntos, sin repetir. Para imprimir sin diálogo, abrir Chrome con `--kiosk-printing`. |
 | **Ticket digital** | Desde el ticket: enviarlo por WhatsApp o mostrar un QR que abre `/ticket/<id>`; también imprimirlo en 80 mm. |
 | **Carta** | Productos con foto o ícono, precio, categoría y disponibilidad; textos del encabezado. |
-| **Reportes** | Ventas por día (hora de Argentina), por turno y por punto, con PDF descargable. |
+| **Reportes** | Ventas por día (hora de Santa Catarina, Brasil), por turno y por punto, con PDF descargable. |
 | **Inventario** | Productos (se compran listos) e insumos (se gastan al preparar): stock, mínimo, costo, compras y conteos. |
 | **Recetas y costos** | Qué lleva cada ítem de la carta, costo sumado, % de ganancia y precio sugerido (redondeado a $10). Cada venta descuenta stock según la receta. |
 | **Proveedores** y **Equipos** | Altas y edición; los equipos registran estado, valor y fecha de compra. |

@@ -28,7 +28,7 @@ export function ticketUrl(sale: LocalSale): string {
 }
 
 export function ticketText(sale: LocalSale): string {
-  const when = new Intl.DateTimeFormat('es-AR', { dateStyle: 'short', timeStyle: 'short', timeZone: 'America/Argentina/Buenos_Aires' }).format(new Date(sale.createdAt));
+  const when = new Intl.DateTimeFormat('es-AR', { dateStyle: 'short', timeStyle: 'short', timeZone: 'America/Sao_Paulo' }).format(new Date(sale.createdAt));
   return [
     '*Caraboa Express*',
     `${sale.orderCode ? `Pedido *${sale.orderCode}* · ` : ''}${when}`,

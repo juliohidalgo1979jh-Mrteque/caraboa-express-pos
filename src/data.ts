@@ -2,22 +2,20 @@ import type { PaymentMethod, PosHeading, Product } from './types';
 
 // Carta inicial: se usa solo hasta que el dispositivo descarga la carta del servidor.
 export const products: Product[] = [
-  { id: 1, name: 'Arepa Pabellón', category: 'Arepas', price: 9.5, symbol: '◉', tone: 'gold', active: true },
-  { id: 2, name: 'Arepa Pelúa', category: 'Arepas', price: 8.75, symbol: '◌', tone: 'coral', active: true },
-  { id: 3, name: 'Arepa Reina Pepiada', category: 'Arepas', price: 8.25, symbol: '◉', tone: 'mint', active: true },
-  { id: 4, name: 'Cachapa con queso', category: 'Cachapas', price: 10.5, symbol: '◒', tone: 'yellow', active: true },
-  { id: 5, name: 'Tequeños (5)', category: 'Para picar', price: 6.5, symbol: '▰', tone: 'pink', active: true },
-  { id: 6, name: 'Yuca frita', category: 'Para picar', price: 5.25, symbol: '✳', tone: 'sage', active: true },
-  { id: 7, name: 'Papelón con limón', category: 'Bebidas', price: 3.5, symbol: '◒', tone: 'lime', active: true },
-  { id: 8, name: 'Chicha venezolana', category: 'Bebidas', price: 4.25, symbol: '◍', tone: 'cream', active: true },
-  { id: 9, name: 'Combo callejero', category: 'Combos', price: 14.5, symbol: '✦', tone: 'blue', active: true },
-  { id: 10, name: 'Combo para dos', category: 'Combos', price: 25, symbol: '✦', tone: 'lavender', active: true },
-  { id: 11, name: 'Extra queso', category: 'Extras', price: 1.5, symbol: '+', tone: 'cream', active: true },
-  { id: 12, name: 'Salsa de ajo', category: 'Extras', price: 0.75, symbol: '◉', tone: 'mint', active: true },
+  { id: 1, name: 'Pizza Margarita 25 cm', category: 'Pizzas', price: 25, symbol: '◉', tone: 'coral', active: true },
+  { id: 2, name: 'Pizza Portuguesa 25 cm', category: 'Pizzas', price: 25, symbol: '◉', tone: 'gold', active: true },
+  { id: 3, name: 'Pizza Calabresa 25 cm', category: 'Pizzas', price: 25, symbol: '◉', tone: 'pink', active: true },
+  { id: 4, name: 'Pizza 4 Quesos 25 cm', category: 'Pizzas', price: 25, symbol: '◉', tone: 'yellow', active: true },
+  { id: 5, name: 'Pizza Salami 25 cm', category: 'Pizzas', price: 25, symbol: '◉', tone: 'lavender', active: true },
+  { id: 6, name: 'Hamburguesa normal', category: 'Hamburguesas', price: 25, symbol: '●', tone: 'sage', active: true },
+  { id: 7, name: 'Hamburguesa especial', category: 'Hamburguesas', price: 30, symbol: '●', tone: 'lime', active: true },
+  { id: 8, name: 'Sándwich de pollo', category: 'Sándwiches', price: 25, symbol: '◒', tone: 'mint', active: true },
+  { id: 9, name: 'Sándwich de pernil', category: 'Sándwiches', price: 25, symbol: '◒', tone: 'cream', active: true },
+  { id: 10, name: 'Tequeños (10 unidades)', category: 'Tequeños', price: 20, symbol: '▰', tone: 'blue', active: true },
 ];
 
 export const defaultHeading: PosHeading = {
-  tagline: 'MARTES DE ANTOJO',
+  tagline: 'CARABOA EXPRESS',
   label: 'CARTA DEL DÍA',
   title: '¿Qué servimos?',
   subtitle: 'Toca un producto para sumarlo al pedido.',
@@ -28,7 +26,7 @@ export const paymentMethods: PaymentMethod[] = ['EFECTIVO', 'TARJETA', 'QR', 'TR
 export const paymentLabels: Record<PaymentMethod, string> = {
   EFECTIVO: 'Efectivo',
   TARJETA: 'Tarjeta',
-  QR: 'QR',
+  QR: 'Pix / QR',
   TRANSFERENCIA: 'Transferencia',
   MERCADO_PAGO: 'Mercado Pago',
 };
@@ -37,14 +35,14 @@ export const tones = ['gold', 'coral', 'mint', 'yellow', 'pink', 'sage', 'lime',
 
 export const symbols = ['◉', '◌', '◒', '◍', '▰', '✳', '✦', '+', '●', '◆', '★', '♥'];
 
-export const currency = new Intl.NumberFormat('es-AR', {
+export const currency = new Intl.NumberFormat('pt-BR', {
   style: 'currency',
-  currency: 'ARS',
+  currency: 'BRL',
 });
 
-/** Fecha de hoy (o de `when`) en Argentina, en formato AAAA-MM-DD. */
+/** Fecha de hoy (o de `when`) en Brasil (hora de Santa Catarina), en formato AAAA-MM-DD. */
 export function todayInArgentina(when = new Date()): string {
-  return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Argentina/Buenos_Aires' }).format(when);
+  return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo' }).format(when);
 }
 
 /** Número de pedido visible: letra del punto + número del día (A-001). */

@@ -49,7 +49,7 @@ class HeadingInput(BaseModel):
 
 
 DEFAULT_HEADING = {
-    "tagline": "MARTES DE ANTOJO",
+    "tagline": "CARABOA EXPRESS",
     "label": "CARTA DEL DÍA",
     "title": "¿Qué servimos?",
     "subtitle": "Toca un producto para sumarlo al pedido.",
