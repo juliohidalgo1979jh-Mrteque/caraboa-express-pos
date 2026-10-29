@@ -28,6 +28,7 @@ def test_portal_data_is_public_and_translated(tmp_path):
     with client_for(tmp_path) as client:
         data = client.get("/api/portal").json()  # sin PIN
         assert data["name"] == "Caraboa Express" and data["enabled"] is True
+        assert data["whatsapp"] == "5548988102993"  # número por defecto del negocio
         pizza = next(p for p in data["products"] if p["id"] == 1)
         assert pizza["name"] == {"es": "Pizza Margarita 25 cm", "pt": "Pizza Margarita 25 cm", "en": "Margherita Pizza 25 cm (10 in)"}
         teque = next(p for p in data["products"] if p["id"] == 10)

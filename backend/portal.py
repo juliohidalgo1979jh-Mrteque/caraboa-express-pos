@@ -17,6 +17,7 @@ LANGS = ("es", "pt", "en")
 STATUSES = ("NUEVO", "CONFIRMADO", "LISTO", "ENTREGADO", "CANCELADO")
 PROMO_KINDS = ("INFO", "PERCENT", "PERCENT_FIRST")
 DEFAULT_NAME = "Caraboa Express"
+DEFAULT_WHATSAPP = "5548988102993"  # +55 48 98810-2993; se cambia en Portal de pedidos → Enlace y ajustes
 MAX_ITEMS = 40
 MAX_QUANTITY = 50
 MAX_PENDING_PER_PHONE = 5  # pedidos NUEVO de un mismo teléfono en la última hora
@@ -109,7 +110,7 @@ def get_setting(session: Session, key: str, default: str = "") -> str:
 def read_settings(session: Session) -> dict[str, Any]:
     return {
         "name": get_setting(session, "name", DEFAULT_NAME),
-        "whatsapp": get_setting(session, "whatsapp", ""),
+        "whatsapp": get_setting(session, "whatsapp", DEFAULT_WHATSAPP),
         "enabled": get_setting(session, "enabled", "1") == "1",
         "infoEs": get_setting(session, "info.es"),
         "infoPt": get_setting(session, "info.pt"),
