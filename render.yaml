@@ -26,5 +26,6 @@ services:
 
 databases:
   - name: caraboa-express-db
-    plan: free
+    # Plan pago: Render permite solo una base gratuita por cuenta y esa vence a los 30 días.
+    plan: basic-256mb
     region: oregon
