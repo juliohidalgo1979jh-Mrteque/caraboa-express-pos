@@ -20,6 +20,7 @@ from .models import Base, Category, PointOfSale, Product, ProductImage, ProductT
 from .inventory import deduct_stock_for_sale, register_inventory_routes
 from .kitchen import register_kitchen_routes
 from .points import PAYMENT_METHODS, register_point_routes, seed_points
+from .pix import register_pix_routes
 from .portal import register_portal_routes
 from .reports import local_day_bounds, register_report_routes
 
@@ -334,7 +335,7 @@ def create_app(
         with session_factory() as session:
             yield session
 
-    owner_only_paths = ("/api/points", "/api/portal/settings", "/api/settings/heading")
+    owner_only_paths = ("/api/points", "/api/portal/settings", "/api/settings/heading", "/api/settings/pix")
 
     def require_admin(request: Request, x_admin_pin: str = Header(default="")) -> None:
         if not pin:
@@ -451,6 +452,7 @@ def create_app(
     register_report_routes(app, get_db, require_admin)
     register_kitchen_routes(app, get_db)
     register_portal_routes(app, get_db, require_admin)
+    register_pix_routes(app, get_db, require_admin)
 
     @app.get("/api/settings/heading")
     def get_heading(session: Session = Depends(get_db)) -> dict[str, str]:

@@ -1,5 +1,6 @@
 import Dexie, { type Table } from 'dexie';
 import { defaultHeading } from './data';
+import { defaultPix, type PixConfig } from './pix';
 import type { LocalSale, LocalShift, PointOfSale, PosHeading, Product, QueueOperation } from './types';
 
 class PosDatabase extends Dexie {
@@ -264,4 +265,40 @@ export async function syncQueue(): Promise<{ connected: boolean; pending: number
   }
 
   return { connected, pending: await db.queue.count() };
+}
+const PIX_STORAGE_KEY = 'caraboa-pix';
+
+export function readCachedPix(): PixConfig {
+  try {
+    const cached = localStorage.getItem(PIX_STORAGE_KEY);
+    return cached ? { ...defaultPix, ...JSON.parse(cached) } : defaultPix;
+  } catch {
+    return defaultPix;
+  }
+}
+
+function cachePix(config: PixConfig) {
+  try {
+    localStorage.setItem(PIX_STORAGE_KEY, JSON.stringify(config));
+  } catch {
+    /* sin almacenamiento: se vuelve a pedir al servidor */
+  }
+}
+
+export async function refreshPix(): Promise<PixConfig | null> {
+  try {
+    const response = await fetch('/api/settings/pix', { signal: AbortSignal.timeout(4000) });
+    if (!response.ok) return null;
+    const config: PixConfig = await response.json();
+    cachePix(config);
+    return config;
+  } catch {
+    return null;
+  }
+}
+
+export async function savePix(config: PixConfig, pin: string): Promise<SaveResult<PixConfig>> {
+  const result = await adminRequest<PixConfig>('/api/settings/pix', 'PUT', config, pin);
+  if (result.ok) cachePix(result.value);
+  return result;
 }

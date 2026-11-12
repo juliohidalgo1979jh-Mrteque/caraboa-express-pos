@@ -40,6 +40,9 @@ import { AdminGate } from './admin/AdminGate';
 import { EquipmentAdmin } from './admin/EquipmentAdmin';
 import { InventoryAdmin } from './admin/InventoryAdmin';
 import { PointsAdmin } from './admin/PointsAdmin';
+import { PixSettings } from './admin/PixSettings';
+import { PixCharge } from './PixCharge';
+import type { PixConfig } from './pix';
 import { RecipesAdmin } from './admin/RecipesAdmin';
 import { ReportsAdmin } from './admin/ReportsAdmin';
 import { PortalAdmin } from './admin/PortalAdmin';
@@ -49,7 +52,7 @@ import { ReceiptShare } from './ReceiptShare';
 import { useKitchenStation } from './kitchen';
 import { printHtml, receiptHtml } from './print';
 import { currency, formatOrderCode, moneyInputValue, parseMoney, paymentLabels, paymentMethods, products as defaultMenu, symbols, todayInArgentina, tones } from './data';
-import { db, deleteProduct, nextOrderNumber, readCachedHeading, readCachedOrderNumbers, readCachedPoints, readDevicePoint, refreshHeading, refreshMenu, refreshOrderNumbers, refreshPoints, resizeImage, saveHeading, saveProduct, setProductImage, storeDevicePoint, syncQueue } from './db';
+import { db, deleteProduct, nextOrderNumber, readCachedHeading, readCachedOrderNumbers, readCachedPix, readCachedPoints, readDevicePoint, refreshHeading, refreshPix, refreshMenu, refreshOrderNumbers, refreshPoints, resizeImage, saveHeading, saveProduct, setProductImage, storeDevicePoint, syncQueue } from './db';
 import type { CartItem, LocalSale, LocalShift, PaymentMethod, PointOfSale, PosHeading, Product } from './types';
 
 type Screen = 'pos' | 'history' | 'menu' | 'kitchen' | 'reports' | 'inventory' | 'recipes' | 'suppliers' | 'equipment' | 'points' | 'portal';
@@ -146,6 +149,7 @@ function App() {
   const [savingProduct, setSavingProduct] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [heading, setHeading] = useState<PosHeading>(readCachedHeading);
+  const [pixConfig, setPixConfig] = useState<PixConfig>(readCachedPix);
   const [points, setPoints] = useState<PointOfSale[]>(readCachedPoints);
   const [devicePoint, setDevicePoint] = useState<PointOfSale | null>(readDevicePoint);
   const [adminVerified, setAdminVerified] = useState(false);
@@ -213,6 +217,7 @@ function App() {
         const [latestMenu, latestHeading, latestPoints, latestNumbers] = await Promise.all([refreshMenu(), refreshHeading(), refreshPoints(), refreshOrderNumbers(todayInArgentina())]);
         if (latestMenu) setMenu(latestMenu);
         if (latestHeading) setHeading(latestHeading);
+        void refreshPix().then((latestPix) => { if (latestPix) setPixConfig(latestPix); });
         if (latestPoints) applyPoints(latestPoints);
         if (latestNumbers) setServerOrderNumbers(latestNumbers);
       }
@@ -628,7 +633,7 @@ function App() {
             {activeScreen === 'suppliers' && <SuppliersAdmin pin={adminPin} onToast={setToast} />}
             {activeScreen === 'equipment' && <EquipmentAdmin pin={adminPin} onToast={setToast} />}
             {activeScreen === 'portal' && <PortalAdmin pin={adminPin} onToast={setToast} />}
-            {activeScreen === 'points' && <PointsAdmin pin={adminPin} points={points} devicePointId={devicePoint?.id ?? null} onSaved={savePoint} />}
+            {activeScreen === 'points' && <><PointsAdmin pin={adminPin} points={points} devicePointId={devicePoint?.id ?? null} onSaved={savePoint} /><PixSettings pin={adminPin} config={pixConfig} onSaved={setPixConfig} /></>}
           </AdminGate>
         ) : (
           <section className="history-page menu-page">
@@ -655,7 +660,7 @@ function App() {
           {!devicePoint && <button className="secondary-button point-skip" onClick={() => setActiveDialog('open')}>Continuar sin punto por ahora</button>}
         </section>}
 
-        {activeDialog === 'checkout' && <section className="modal checkout-modal" role="dialog" aria-modal="true" aria-labelledby="checkout-title"><div className="modal-topline"><span className="modal-symbol orange"><CreditCard size={20} /></span><button className="icon-button" onClick={() => setActiveDialog(null)} aria-label="Cerrar"><X size={18} /></button></div><p className="eyebrow">PEDIDO {nextOrderCode}</p><h2 id="checkout-title">Forma de pago</h2><p className="modal-copy">Selecciona cómo recibes el pago.</p><div className="payment-options" role="group" aria-label="Método de pago">{allowedMethods.map((method) => { const Icon = paymentIcons[method]; return <button key={method} className={paymentMethod === method ? 'selected' : ''} onClick={() => setPaymentMethod(method)}><span><Icon size={19} /></span><strong>{paymentLabels[method]}</strong>{paymentMethod === method && <Check size={16} />}</button>; })}</div><div className="tip-picker"><span className="tip-label">Propina <small>opcional</small></span><div className="tip-options"><button className={tipRate === null ? 'selected' : ''} onClick={() => { setTipRate(null); setCustomTip(''); }}>Sin propina</button><button className={tipRate === 10 ? 'selected' : ''} onClick={() => setTipRate(10)}>10%</button><button className={tipRate === 15 ? 'selected' : ''} onClick={() => setTipRate(15)}>15%</button><button className={tipRate === 'custom' ? 'selected' : ''} onClick={() => setTipRate('custom')}>Libre</button></div>{tipRate === 'custom' && <div className="money-input custom-tip-input"><span>R$</span><input aria-label="Propina libre" type="text" inputMode="decimal" autoComplete="off" value={customTip} onChange={(event) => setCustomTip(event.target.value)} placeholder="0,00" /></div>}</div>{paymentMethod === 'EFECTIVO' && <><label className="field-label" htmlFor="cash-received">Efectivo recibido <span>BRL</span></label><div className="money-input"><span>R$</span><input id="cash-received" autoFocus type="text" inputMode="decimal" autoComplete="off" value={cashReceived} onChange={(event) => setCashReceived(event.target.value)} placeholder={moneyInputValue(amountDue)} /></div><div className="change-row"><span>Cambio</span><strong>{currency.format(changeDue)}</strong></div></>}<div className="checkout-breakdown"><div><span>Consumo</span><strong>{currency.format(cartTotal)}</strong></div><div><span>Propina</span><strong>{currency.format(tipAmount)}</strong></div></div><div className="checkout-total"><span>Total a cobrar</span><strong>{currency.format(amountDue)}</strong></div><button className="modal-primary" onClick={() => void completeSale()} disabled={paymentMethod === 'EFECTIVO' && (parseMoney(cashReceived) || 0) < amountDue}>Confirmar cobro <CheckCircle2 size={18} /></button><div className="modal-footnote"><Cloud size={14} /> Pago registrado localmente. La integración con terminales se configura aparte.</div></section>}
+        {activeDialog === 'checkout' && <section className="modal checkout-modal" role="dialog" aria-modal="true" aria-labelledby="checkout-title"><div className="modal-topline"><span className="modal-symbol orange"><CreditCard size={20} /></span><button className="icon-button" onClick={() => setActiveDialog(null)} aria-label="Cerrar"><X size={18} /></button></div><p className="eyebrow">PEDIDO {nextOrderCode}</p><h2 id="checkout-title">Forma de pago</h2><p className="modal-copy">Selecciona cómo recibes el pago.</p><div className="payment-options" role="group" aria-label="Método de pago">{allowedMethods.map((method) => { const Icon = paymentIcons[method]; return <button key={method} className={paymentMethod === method ? 'selected' : ''} onClick={() => setPaymentMethod(method)}><span><Icon size={19} /></span><strong>{paymentLabels[method]}</strong>{paymentMethod === method && <Check size={16} />}</button>; })}</div><div className="tip-picker"><span className="tip-label">Propina <small>opcional</small></span><div className="tip-options"><button className={tipRate === null ? 'selected' : ''} onClick={() => { setTipRate(null); setCustomTip(''); }}>Sin propina</button><button className={tipRate === 10 ? 'selected' : ''} onClick={() => setTipRate(10)}>10%</button><button className={tipRate === 15 ? 'selected' : ''} onClick={() => setTipRate(15)}>15%</button><button className={tipRate === 'custom' ? 'selected' : ''} onClick={() => setTipRate('custom')}>Libre</button></div>{tipRate === 'custom' && <div className="money-input custom-tip-input"><span>R$</span><input aria-label="Propina libre" type="text" inputMode="decimal" autoComplete="off" value={customTip} onChange={(event) => setCustomTip(event.target.value)} placeholder="0,00" /></div>}</div>{paymentMethod === 'QR' && <PixCharge config={pixConfig} amount={amountDue} orderCode={nextOrderCode} onToast={setToast} />}{paymentMethod === 'EFECTIVO' && <><label className="field-label" htmlFor="cash-received">Efectivo recibido <span>BRL</span></label><div className="money-input"><span>R$</span><input id="cash-received" autoFocus type="text" inputMode="decimal" autoComplete="off" value={cashReceived} onChange={(event) => setCashReceived(event.target.value)} placeholder={moneyInputValue(amountDue)} /></div><div className="change-row"><span>Cambio</span><strong>{currency.format(changeDue)}</strong></div></>}<div className="checkout-breakdown"><div><span>Consumo</span><strong>{currency.format(cartTotal)}</strong></div><div><span>Propina</span><strong>{currency.format(tipAmount)}</strong></div></div><div className="checkout-total"><span>Total a cobrar</span><strong>{currency.format(amountDue)}</strong></div><button className="modal-primary" onClick={() => void completeSale()} disabled={paymentMethod === 'EFECTIVO' && (parseMoney(cashReceived) || 0) < amountDue}>Confirmar cobro <CheckCircle2 size={18} /></button><div className="modal-footnote"><Cloud size={14} /> Pago registrado localmente. La integración con terminales se configura aparte.</div></section>}
 
         {activeDialog === 'product' && draft && <section className="modal product-modal" role="dialog" aria-modal="true" aria-labelledby="product-title">
           <div className="modal-topline"><span className={`cart-thumb ${draft.tone}`}>{draft.image ? <img src={draft.image} alt="" /> : draft.symbol || symbols[0]}</span><button className="icon-button" onClick={() => setActiveDialog(null)} aria-label="Cerrar"><X size={18} /></button></div>

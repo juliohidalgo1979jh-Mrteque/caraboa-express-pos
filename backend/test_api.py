@@ -655,3 +655,19 @@ def test_manager_pin_can_edit_but_not_delete(tmp_path):
         assert c.delete("/api/products/1", headers=mgr).status_code == 403
         assert c.put("/api/portal/settings", headers=mgr, json={}).status_code == 403
         assert c.delete("/api/products/1", headers=owner).status_code in (200, 204)
+
+
+def test_pix_settings_validation_and_roles(tmp_path):
+    from fastapi.testclient import TestClient
+    app = create_app(database_url=f"sqlite:///{tmp_path}/p.db", frontend_dist=None, admin_pin="1111", manager_pin="2222")
+    with TestClient(app) as c:
+        owner = {"X-Admin-Pin": "1111"}
+        assert c.get("/api/settings/pix").json()["keyType"] == "NONE"
+        good = {"keyType": "CELULAR", "key": "48 98810-2993", "name": "Caraboa Express", "city": "Florianopolis", "link": ""}
+        assert c.put("/api/settings/pix", json=good).status_code == 401
+        assert c.put("/api/settings/pix", headers={"X-Admin-Pin": "2222"}, json=good).status_code == 403
+        assert c.put("/api/settings/pix", headers=owner, json={**good, "city": ""}).status_code == 422
+        assert c.put("/api/settings/pix", headers=owner, json={**good, "keyType": "CPF_CNPJ", "key": "123"}).status_code == 422
+        assert c.put("/api/settings/pix", headers=owner, json={**good, "link": "ftp://x"}).status_code == 422
+        assert c.put("/api/settings/pix", headers=owner, json=good).status_code == 200
+        assert c.get("/api/settings/pix").json()["name"] == "Caraboa Express"
