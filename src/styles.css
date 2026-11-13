@@ -603,3 +603,7 @@ div.modal-copy p { margin: 0 0 8px; }
 .breakdown-text{font-size:11px;color:#6d6657}
 .audit-expected{margin:8px 0;font-size:14px}
 .audit-diff{font-weight:700;margin:6px 0}
+.order-delivery{display:flex;align-items:end;gap:8px;flex-wrap:wrap;margin:8px 0}
+.order-delivery label{font-size:11px;font-weight:700;color:#8a8273;width:100%}
+.order-delivery .money-input{max-width:150px}
+.order-send-total{margin:4px 0 8px}

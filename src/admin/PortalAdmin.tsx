@@ -2,7 +2,9 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Check, Copy, ExternalLink, Globe, MessageCircle, Pencil, Plus, Tag, Trash2 } from 'lucide-react';
 import qrcode from 'qrcode-generator';
 import { adminRequest } from '../db';
-import { currency } from '../data';
+import { currency, parseMoney, paymentLabels } from '../data';
+import { readCachedPix } from '../db';
+import { buildPixPayload, hasPixKey } from '../pix';
 import { whatsappNumber } from '../ReceiptShare';
 import { ConfirmDelete, Modal, useAdminList } from './ui';
 
@@ -21,7 +23,10 @@ interface OnlineOrder {
   subtotal: number;
   discount: number;
   promotion: string;
+  deliveryFee: number | null;
   total: number;
+  paymentMethod: string | null;
+  saleId: number | null;
   status: Status;
   createdAt: string;
   items: Array<{ name: string; quantity: number; unitPrice: number; subtotal: number }>;
@@ -99,6 +104,26 @@ const nextStep: Partial<Record<Status, { to: Status; label: string }>> = {
   LISTO: { to: 'ENTREGADO', label: 'Marcar entregado' },
 };
 
+const PAY_METHODS = ['EFECTIVO', 'QR', 'TARJETA', 'TRANSFERENCIA', 'MERCADO_PAGO'] as const;
+const brl = (value: number) => currency.format(value);
+
+/** Mensaje con el total (envío incluido) en el idioma del cliente; con Pix copia e cola si el local lo tiene configurado. */
+function totalMessage(order: OnlineOrder): string {
+  const pix = readCachedPix();
+  const payload = hasPixKey(pix) ? buildPixPayload(pix, order.total, order.code.replace(/\W/g, '')) : null;
+  const fee = order.deliveryFee ?? 0;
+  const t = {
+    es: { hi: `Hola ${order.name}! Tu pedido *${order.code}*:`, items: 'Productos', fee: 'Envío', total: 'Total a pagar', pix: 'Puedes pagar con *Pix copia e cola* (copia el mensaje de abajo y pégalo en tu banco):', link: 'O paga por este enlace:', cash: 'Pagas al recibir el pedido.', thanks: 'Gracias! 🙏' },
+    pt: { hi: `Olá ${order.name}! Seu pedido *${order.code}*:`, items: 'Produtos', fee: 'Entrega', total: 'Total a pagar', pix: 'Você pode pagar com *Pix copia e cola* (copie a mensagem abaixo e cole no app do banco):', link: 'Ou pague pelo link:', cash: 'Pagamento na entrega.', thanks: 'Obrigado! 🙏' },
+    en: { hi: `Hi ${order.name}! Your order *${order.code}*:`, items: 'Items', fee: 'Delivery', total: 'Total to pay', pix: 'You can pay with *Pix copy & paste* (copy the message below and paste it in your bank app):', link: 'Or pay with this link:', cash: 'Pay on delivery.', thanks: 'Thank you! 🙏' },
+  }[order.lang];
+  return [
+    t.hi, `${t.items}: ${brl(order.subtotal - order.discount)}`, ...(order.fulfillment === 'ENTREGA' ? [`${t.fee}: ${brl(fee)}`] : []), `*${t.total}: ${brl(order.total)}*`, '',
+    ...(payload ? [t.pix, '', payload, ''] : [t.cash, '']),
+    ...(readCachedPix().link.trim() ? [`${t.link} ${readCachedPix().link.trim()}`, ''] : []), t.thanks,
+  ].join('\n');
+}
+
 function OrdersTab({ pin, onToast }: { pin: string; onToast: (message: string) => void }) {
   const [scope, setScope] = useState<'active' | 'all'>('active');
   const { items: orders, error, loading, reload } = useAdminList<OnlineOrder>(`/api/portal/orders?scope=${scope}`, pin);
@@ -109,14 +134,35 @@ function OrdersTab({ pin, onToast }: { pin: string; onToast: (message: string) =
     return () => window.clearInterval(timer);
   }, [reload]);
 
-  async function setStatus(order: OnlineOrder, status: Status) {
-    const result = await adminRequest<OnlineOrder>(`/api/portal/orders/${order.id}`, 'PUT', { status }, pin);
+  const [fees, setFees] = useState<Record<number, string>>({});
+  const [payFor, setPayFor] = useState<OnlineOrder | null>(null);
+  const [payMethod, setPayMethod] = useState<(typeof PAY_METHODS)[number]>('EFECTIVO');
+
+  async function setStatus(order: OnlineOrder, status: Status, paymentMethod?: string) {
+    const result = await adminRequest<OnlineOrder>(`/api/portal/orders/${order.id}`, 'PUT', { status, paymentMethod }, pin);
     if (!result.ok) {
       onToast(result.message);
       return;
     }
+    setPayFor(null);
     onToast(`${order.code}: ${statusLabels[status].toLowerCase()}`);
     void reload();
+  }
+
+  async function saveFee(order: OnlineOrder): Promise<OnlineOrder | null> {
+    const text = fees[order.id] ?? (order.deliveryFee !== null ? String(order.deliveryFee).replace('.', ',') : '');
+    if (text.trim() === '') { onToast('Escribe el costo del envío (0 si no se cobra).'); return null; }
+    const result = await adminRequest<OnlineOrder>(`/api/portal/orders/${order.id}`, 'PUT', { deliveryFee: parseMoney(text) || 0 }, pin);
+    if (!result.ok) { onToast(result.message); return null; }
+    onToast(`${order.code}: envío ${brl(result.value.deliveryFee ?? 0)} · total ${brl(result.value.total)}`);
+    void reload();
+    return result.value;
+  }
+
+  async function sendTotal(order: OnlineOrder) {
+    const saved = order.fulfillment === 'ENTREGA' ? await saveFee(order) : order;
+    if (!saved) return;
+    window.open(`https://wa.me/${whatsappNumber(saved.phone)}?text=${encodeURIComponent(totalMessage(saved))}`, '_blank', 'noopener,noreferrer');
   }
 
   const newCount = orders.filter((order) => order.status === 'NUEVO').length;
@@ -146,20 +192,38 @@ function OrdersTab({ pin, onToast }: { pin: string; onToast: (message: string) =
               <p className="order-how">{order.fulfillment === 'ENTREGA' ? `Entrega a domicilio: ${order.address}` : 'Retira en el local'}</p>
               <ul>{order.items.map((item) => <li key={item.name}><span>{item.quantity} × {item.name}</span><span>{currency.format(item.subtotal)}</span></li>)}</ul>
               {order.notes && <p className="order-notes">Notas: {order.notes}</p>}
+              {order.fulfillment === 'ENTREGA' && order.status !== 'ENTREGADO' && order.status !== 'CANCELADO' && (
+                <div className="order-delivery">
+                  <label htmlFor={`fee-${order.id}`}>Costo del envío</label>
+                  <div className="money-input"><span>R$</span><input id={`fee-${order.id}`} type="text" inputMode="decimal" autoComplete="off" placeholder="a confirmar" value={fees[order.id] ?? (order.deliveryFee !== null ? String(order.deliveryFee).replace('.', ',') : '')} onChange={(event) => setFees({ ...fees, [order.id]: event.target.value })} /></div>
+                  <button className="secondary-button" onClick={() => void saveFee(order)}>Guardar envío</button>
+                </div>
+              )}
+              {order.status !== 'ENTREGADO' && order.status !== 'CANCELADO' && (order.fulfillment === 'RETIRO' || order.deliveryFee !== null || (fees[order.id] ?? '').trim() !== '') && (
+                <button className="secondary-button order-send-total" onClick={() => void sendTotal(order)}><MessageCircle size={14} /> Enviar total por WhatsApp</button>
+              )}
               <footer>
                 <div className="order-total">
                   {order.discount > 0 && <small>Descuento {order.promotion}: −{currency.format(order.discount)}</small>}
+                  {order.fulfillment === 'ENTREGA' && <small>{order.deliveryFee === null ? 'Envío: a confirmar' : `Envío: ${currency.format(order.deliveryFee)}`}</small>}
                   <strong>{currency.format(order.total)}</strong>
                 </div>
                 <div className="order-actions">
                   {order.status !== 'CANCELADO' && order.status !== 'ENTREGADO' && <button className="secondary-button" onClick={() => void setStatus(order, 'CANCELADO')}>Cancelar</button>}
-                  {step && <button className="modal-primary" onClick={() => void setStatus(order, step.to)}>{step.label}</button>}
+                  {step && <button className="modal-primary" onClick={() => { if (step.to === 'ENTREGADO') { setPayMethod('EFECTIVO'); setPayFor(order); } else void setStatus(order, step.to); }}>{step.label}</button>}
                 </div>
               </footer>
             </article>
           );
         })}
       </div>
+      {payFor && <Modal title={`Entregar ${payFor.code}`} eyebrow="COBRO DEL PEDIDO" icon={<Check size={19} />} onClose={() => setPayFor(null)}>
+        <p className="muted">Total a cobrar: <strong>{brl(payFor.total)}</strong>. Se registra como venta en la caja abierta.</p>
+        {payFor.fulfillment === 'ENTREGA' && payFor.deliveryFee === null && <p className="form-error">Primero guarda el costo del envío (puede ser 0).</p>}
+        <span className="field-label">¿Con qué pagó el cliente?</span>
+        <div className="method-options" role="group" aria-label="Medio de pago">{PAY_METHODS.map((method) => <button type="button" key={method} className={payMethod === method ? 'selected' : ''} aria-pressed={payMethod === method} onClick={() => setPayMethod(method)}>{paymentLabels[method]}</button>)}</div>
+        <button className="modal-primary" onClick={() => void setStatus(payFor, 'ENTREGADO', payMethod)}>Confirmar entrega y cobro <Check size={18} /></button>
+      </Modal>}
     </>
   );
 }

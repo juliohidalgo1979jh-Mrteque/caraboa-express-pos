@@ -253,6 +253,7 @@ export default function Portal() {
           </ul>
           {placed.discount > 0 && <p className="thanks-discount">{t.discount} ({placed.promotionTitles?.[lang] ?? placed.promotion}): −{money(placed.discount)}</p>}
           <p className="thanks-total">{t.total} <strong>{money(placed.total)}</strong></p>
+          {placed.fulfillment === 'ENTREGA' && <p className="hint">{t.deliveryFeeTbd}</p>}
           <p className="thanks-note">{link ? t.thanksWhatsapp : t.thanksNoWhatsapp}</p>
           {link && <a className="btn-primary whatsapp" href={link} target="_blank" rel="noopener noreferrer">{t.sendWhatsapp}</a>}
           <button className="btn-ghost" onClick={() => setPlaced(null)}>{t.newOrder}</button>
@@ -370,6 +371,7 @@ export default function Portal() {
                   {discount > 0 && quote?.promotion && <div className="discount"><dt>{t.discount} · {quote.promotion.title[lang]}</dt><dd>−{money(discount)}</dd></div>}
                   <div className="grand"><dt>{t.total}</dt><dd>{money(total)}</dd></div>
                 </dl>
+                {fulfillment === 'ENTREGA' && <p className="hint">{t.deliveryFeeTbd}</p>}
 
                 <div className="form">
                   <label>{t.name}<input value={name} onChange={(event) => setName(event.target.value)} autoComplete="name" maxLength={80} /></label>

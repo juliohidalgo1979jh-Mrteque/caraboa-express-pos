@@ -269,6 +269,9 @@ class OnlineOrder(Base):
     total: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
     status: Mapped[str] = mapped_column("estado", String(12), default="NUEVO", nullable=False)
     stock_deducted: Mapped[bool] = mapped_column("stock_descontado", Boolean, default=False, nullable=False)
+    delivery_fee: Mapped[Decimal | None] = mapped_column("envio", Numeric(10, 2))  # None = a confirmar
+    payment_method: Mapped[str | None] = mapped_column("metodo_pago", String(20))
+    sale_id: Mapped[int | None] = mapped_column("venta_id", Integer)
     created_at: Mapped[datetime] = mapped_column("creado_en", DateTime, nullable=False)
 
 

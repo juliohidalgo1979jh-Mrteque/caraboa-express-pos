@@ -11,7 +11,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from .inventory import deduct_stock_for_sale, now_utc, restore_stock_for_order
-from .models import Category, OnlineOrder, OnlineOrderItem, Product, ProductText, Promotion, Setting
+from .models import Category, OnlineOrder, Sale, SaleDetail, Shift, OnlineOrderItem, Product, ProductText, Promotion, Setting
 from .reports import LOCAL_TZ
 
 LANGS = ("es", "pt", "en")
@@ -81,7 +81,9 @@ class ProductTextsInput(BaseModel):
 
 
 class StatusInput(BaseModel):
-    status: Literal["NUEVO", "CONFIRMADO", "LISTO", "ENTREGADO", "CANCELADO"]
+    status: Literal["NUEVO", "CONFIRMADO", "LISTO", "ENTREGADO", "CANCELADO"] | None = None
+    deliveryFee: Decimal | None = Field(default=None, ge=0, le=100000, max_digits=10, decimal_places=2)
+    paymentMethod: Literal["EFECTIVO", "TARJETA", "QR", "TRANSFERENCIA", "MERCADO_PAGO"] | None = None
 
 
 def digits_only(value: str) -> str:
@@ -223,7 +225,10 @@ def serialize_order(order: OnlineOrder, items: list[OnlineOrderItem]) -> dict[st
         "subtotal": float(order.subtotal),
         "discount": float(order.discount),
         "promotion": order.promo_title,
+        "deliveryFee": float(order.delivery_fee) if order.delivery_fee is not None else None,
         "total": float(order.total),
+        "paymentMethod": order.payment_method,
+        "saleId": order.sale_id,
         "status": order.status,
         "createdAt": order.created_at.replace(tzinfo=timezone.utc).isoformat(),
         "items": [{"name": item.name, "quantity": item.quantity, "unitPrice": float(item.unit_price), "subtotal": float(item.subtotal)} for item in items],
@@ -450,13 +455,43 @@ def register_portal_routes(app: FastAPI, get_db: Callable[..., Any], require_adm
         items = list(session.scalars(select(OnlineOrderItem).where(OnlineOrderItem.order_id == order.id).order_by(OnlineOrderItem.id)))
         lines = [(item.product_id, item.quantity) for item in items]
         label = f"Pedido online {order.code}"
+        status = data.status or order.status
+        if order.status in ("ENTREGADO", "CANCELADO") and (status != order.status or data.deliveryFee is not None):
+            raise HTTPException(status_code=409, detail="Este pedido ya está cerrado")
+        # El envío lo fija el local al ver la dirección; el total del pedido pasa a incluirlo.
+        if data.deliveryFee is not None:
+            if order.fulfillment != "ENTREGA":
+                raise HTTPException(status_code=422, detail="El pedido es para retirar: no lleva envío")
+            order.delivery_fee = data.deliveryFee
+            order.total = order.subtotal - order.discount + data.deliveryFee
         # El stock se descuenta una sola vez, cuando el local acepta el pedido (o lo prepara, si se salteó ese paso).
-        if data.status in ("CONFIRMADO", "LISTO", "ENTREGADO") and not order.stock_deducted:
+        if status in ("CONFIRMADO", "LISTO", "ENTREGADO") and not order.stock_deducted:
             deduct_stock_for_sale(session, None, lines, now_utc(), label)
             order.stock_deducted = True
-        elif data.status == "CANCELADO" and order.stock_deducted:
+        elif status == "CANCELADO" and order.stock_deducted:
             restore_stock_for_order(session, lines, now_utc(), f"{label} cancelado")
             order.stock_deducted = False
-        order.status = data.status
+        if status == "ENTREGADO" and order.sale_id is None:
+            if order.fulfillment == "ENTREGA" and order.delivery_fee is None:
+                raise HTTPException(status_code=422, detail="Indica el costo del envío antes de marcarlo como entregado (puede ser 0)")
+            if data.paymentMethod is None:
+                raise HTTPException(status_code=422, detail="Indica con qué medio pagó el cliente")
+            shift = session.scalars(select(Shift).where(Shift.state == "ABIERTO").order_by(Shift.opened_at.desc())).first()
+            if shift is None:
+                raise HTTPException(status_code=409, detail="Abre la caja antes de marcar el pedido como entregado: la venta se registra en el turno abierto")
+            fee = order.delivery_fee or Decimal("0")
+            now = now_utc()
+            sale = Sale(
+                uuid_local=f"online-{order.id}", shift_id=shift.id, subtotal=order.subtotal - order.discount, tip=Decimal("0"),
+                delivery_fee=fee, total=order.subtotal - order.discount + fee, payment_method=data.paymentMethod,
+                point_id=shift.point_id, order_code=order.code, created_at=now,
+            )
+            session.add(sale)
+            session.flush()
+            session.add_all(SaleDetail(sale_id=sale.id, product_id=item.product_id, product_name=item.name, quantity=item.quantity,
+                                       unit_price=item.unit_price, subtotal=item.subtotal) for item in items)
+            order.sale_id = sale.id
+            order.payment_method = data.paymentMethod
+        order.status = status
         session.commit()
         return serialize_order(order, items)

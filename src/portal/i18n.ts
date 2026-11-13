@@ -10,6 +10,7 @@ export const strings = {
   es: {
     pickup: 'Retiro en el local',
     delivery: 'Entrega a domicilio',
+    deliveryFeeTbd: 'Envío: te confirmamos el costo por WhatsApp según tu dirección',
     all: 'Todo',
     add: 'Agregar',
     remove: 'Quitar uno',
@@ -59,6 +60,7 @@ export const strings = {
   pt: {
     pickup: 'Retirar no local',
     delivery: 'Entrega em casa',
+    deliveryFeeTbd: 'Entrega: confirmamos a taxa pelo WhatsApp conforme o seu endereço',
     all: 'Tudo',
     add: 'Adicionar',
     remove: 'Tirar um',
@@ -108,6 +110,7 @@ export const strings = {
   en: {
     pickup: 'Pick up at the shop',
     delivery: 'Home delivery',
+    deliveryFeeTbd: "Delivery: we'll confirm the fee on WhatsApp based on your address",
     all: 'All',
     add: 'Add',
     remove: 'Remove one',
