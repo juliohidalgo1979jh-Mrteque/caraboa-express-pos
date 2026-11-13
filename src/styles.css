@@ -580,3 +580,10 @@ div.modal-copy p { margin: 0 0 8px; }
 .purchase-detail td{background:#fffaf2}
 .purchase-detail-line{display:grid;grid-template-columns:2fr 2fr 1.4fr auto;gap:10px;padding:4px 0;font-size:13px}
 .expiry-alert{background:#fff0d6;color:#7a4a00}
+
+/* Gastos y personal */
+.month-input{width:auto;min-width:150px}
+.section-title{margin:18px 0 8px;font-size:15px}
+.pending-box{display:grid;gap:6px;margin:0 0 12px;padding:12px 14px;border:1px solid #f0cf94;border-radius:12px;background:#fff7e6}
+.pending-row{display:grid;grid-template-columns:1fr auto auto;gap:10px;align-items:center;font-size:13px}
+@media (max-width:700px){.pending-row{grid-template-columns:1fr auto}.pending-row .secondary-button{grid-column:1/-1}}

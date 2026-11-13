@@ -26,6 +26,7 @@ import {
   Plus,
   Printer,
   QrCode,
+  Receipt,
   ReceiptText,
   Search,
   ShoppingBag,
@@ -47,6 +48,7 @@ import type { PixConfig } from './pix';
 import { RecipesAdmin } from './admin/RecipesAdmin';
 import { ReportsAdmin } from './admin/ReportsAdmin';
 import { PortalAdmin } from './admin/PortalAdmin';
+import { ExpensesAdmin } from './admin/ExpensesAdmin';
 import { SuppliersAdmin } from './admin/SuppliersAdmin';
 import { KitchenScreen } from './KitchenScreen';
 import { ReceiptShare } from './ReceiptShare';
@@ -56,7 +58,7 @@ import { currency, formatOrderCode, moneyInputValue, parseMoney, paymentLabels, 
 import { db, deleteProduct, nextOrderNumber, readCachedHeading, readCachedOrderNumbers, readCachedPix, readCachedPoints, readDevicePoint, refreshHeading, refreshPix, refreshMenu, refreshOrderNumbers, refreshPoints, resizeImage, saveHeading, saveProduct, setProductImage, storeDevicePoint, syncQueue } from './db';
 import type { CartItem, LocalSale, LocalShift, PaymentMethod, PointOfSale, PosHeading, Product } from './types';
 
-type Screen = 'pos' | 'history' | 'menu' | 'kitchen' | 'reports' | 'inventory' | 'recipes' | 'suppliers' | 'equipment' | 'points' | 'portal';
+type Screen = 'pos' | 'history' | 'menu' | 'kitchen' | 'reports' | 'inventory' | 'recipes' | 'suppliers' | 'equipment' | 'points' | 'portal' | 'expenses';
 type Dialog = 'open' | 'close' | 'checkout' | 'receipt' | 'product' | 'heading' | 'point' | null;
 
 interface ProductDraft {
@@ -83,11 +85,13 @@ const screenTitles: Record<Screen, string> = {
   equipment: 'Equipos',
   points: 'Puntos de venta',
   portal: 'Portal de pedidos',
+  expenses: 'Gastos y personal',
 };
 
 const adminScreens: Array<{ screen: Screen; icon: typeof Package }> = [
   { screen: 'reports', icon: BarChart3 },
   { screen: 'inventory', icon: Package },
+  { screen: 'expenses', icon: Receipt },
   { screen: 'recipes', icon: Calculator },
   { screen: 'suppliers', icon: Handshake },
   { screen: 'equipment', icon: Wrench },
@@ -640,6 +644,7 @@ function App() {
             {activeScreen === 'suppliers' && <SuppliersAdmin pin={adminPin} onToast={setToast} />}
             {activeScreen === 'equipment' && <EquipmentAdmin pin={adminPin} onToast={setToast} />}
             {activeScreen === 'portal' && <PortalAdmin pin={adminPin} onToast={setToast} />}
+            {activeScreen === 'expenses' && <ExpensesAdmin pin={adminPin} onToast={setToast} />}
             {activeScreen === 'points' && <><PointsAdmin pin={adminPin} points={points} devicePointId={devicePoint?.id ?? null} onSaved={savePoint} /><PixSettings pin={adminPin} config={pixConfig} onSaved={setPixConfig} /></>}
           </AdminGate>
         ) : (

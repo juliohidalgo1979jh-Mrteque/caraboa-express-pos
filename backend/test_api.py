@@ -726,3 +726,28 @@ def test_purchase_with_lines_lots_and_waste(tmp_path):
         c.post("/api/purchases", headers=h, json={"lines": [{"itemId": queso["id"], "quantity": 1, "lineTotal": 10, "expiresOn": past}]})
         assert {i["name"]: i for i in c.get("/api/stock-items", headers=h).json()}["Queso"]["expiryStatus"] == "VENCIDO"
         assert len(c.get("/api/purchases", headers=h).json()) == 2
+
+
+def test_expenses_workers_and_summary(tmp_path):
+    from fastapi.testclient import TestClient
+    app = create_app(database_url=f"sqlite:///{tmp_path}/g.db", frontend_dist=None, admin_pin="1111", manager_pin="2222")
+    with TestClient(app) as c:
+        owner, mgr = {"X-Admin-Pin": "1111"}, {"X-Admin-Pin": "2222"}
+        e = c.post("/api/expenses", headers=mgr, json={"kind": "FIJO", "category": "Alquiler", "amount": 1500, "account": "BANCO"})
+        assert e.status_code == 201
+        assert c.post("/api/expenses", headers=mgr, json={"kind": "VARIABLE", "category": "Bolsas", "amount": 80.5}).status_code == 201
+        assert c.post("/api/expenses", headers=mgr, json={"kind": "FIJO", "category": "Luz", "amount": 0}).status_code == 422
+        assert c.delete(f"/api/expenses/{e.json()['id']}", headers=mgr).status_code == 403
+        ana = c.post("/api/workers", headers=mgr, json={"name": "Ana", "payType": "HORA", "rate": 12.5}).json()
+        luis = c.post("/api/workers", headers=mgr, json={"name": "Luis", "payType": "DIA", "rate": 100}).json()
+        done = c.post("/api/worker-payments", headers=mgr, json={"workerId": ana["id"], "units": 6, "paid": True, "account": "CAJA"}).json()
+        pend = c.post("/api/worker-payments", headers=mgr, json={"workerId": luis["id"], "units": 2}).json()
+        assert done["amount"] == 75.0 and not done["pending"] and pend["amount"] == 200.0 and pend["pending"]
+        assert len(c.get("/api/worker-payments?pending=true", headers=mgr).json()) == 1
+        assert c.put(f"/api/worker-payments/{pend['id']}/pay", headers=mgr, json={"account": "BANCO"}).json()["pending"] is False
+        assert c.get("/api/expenses?month=2026-13", headers=mgr).status_code == 422
+        s = c.get("/api/expenses/summary", headers=mgr).json()
+        assert s["fixed"] == 1500 and s["variable"] == 80.5 and s["staffPaid"] == 275 and s["staffPending"] == 0
+        assert s["total"] == 1855.5
+        assert c.delete(f"/api/expenses/{e.json()['id']}", headers=owner).status_code == 200
+        assert c.get("/api/expenses/summary", headers=owner).json()["fixed"] == 0

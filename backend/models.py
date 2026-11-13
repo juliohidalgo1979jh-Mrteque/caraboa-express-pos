@@ -281,3 +281,51 @@ class OnlineOrderItem(Base):
     quantity: Mapped[int] = mapped_column("cantidad", Integer, nullable=False)
     unit_price: Mapped[Decimal] = mapped_column("precio_unitario", Numeric(10, 2), nullable=False)
     subtotal: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
+
+
+class Expense(Base):
+    """Gasto del local: FIJO (alquiler, luz, internet) o VARIABLE (mantenimiento, bolsas, reparaciones)."""
+
+    __tablename__ = "gastos"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    kind: Mapped[str] = mapped_column("tipo", String(10), nullable=False)
+    category: Mapped[str] = mapped_column("categoria", String(40), nullable=False)
+    description: Mapped[str] = mapped_column("descripcion", String(120), default="", nullable=False)
+    amount: Mapped[Decimal] = mapped_column("monto", Numeric(12, 2), nullable=False)
+    paid_on: Mapped[date] = mapped_column("fecha", Date, nullable=False)
+    account: Mapped[str] = mapped_column("cuenta", String(12), default="CAJA", nullable=False)
+    is_deleted: Mapped[bool] = mapped_column("eliminado", Boolean, default=False, nullable=False)
+    created_at: Mapped[datetime] = mapped_column("creado_en", DateTime, nullable=False)
+
+
+class Worker(Base):
+    """Persona que trabaja por día o por hora."""
+
+    __tablename__ = "personal"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    name: Mapped[str] = mapped_column("nombre", String(100), nullable=False)
+    pay_type: Mapped[str] = mapped_column("tipo_pago", String(5), nullable=False)  # DIA | HORA
+    rate: Mapped[Decimal] = mapped_column("tarifa", Numeric(10, 2), nullable=False)
+    phone: Mapped[str] = mapped_column("telefono", String(40), default="", nullable=False)
+    is_active: Mapped[bool] = mapped_column("es_activo", Boolean, default=True, nullable=False)
+    is_deleted: Mapped[bool] = mapped_column("eliminado", Boolean, default=False, nullable=False)
+
+
+class WorkerPayment(Base):
+    """Trabajo realizado (días u horas) y su pago. Sin fecha de pago = pendiente."""
+
+    __tablename__ = "pagos_personal"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    worker_id: Mapped[int] = mapped_column("persona_id", ForeignKey("personal.id"), nullable=False)
+    worked_on: Mapped[date] = mapped_column("fecha_trabajo", Date, nullable=False)
+    units: Mapped[Decimal] = mapped_column("cantidad", Numeric(6, 2), nullable=False)
+    rate: Mapped[Decimal] = mapped_column("tarifa", Numeric(10, 2), nullable=False)
+    amount: Mapped[Decimal] = mapped_column("monto", Numeric(12, 2), nullable=False)
+    paid_on: Mapped[date | None] = mapped_column("fecha_pago", Date)
+    account: Mapped[str | None] = mapped_column("cuenta", String(12))
+    note: Mapped[str] = mapped_column("nota", String(200), default="", nullable=False)
+    is_deleted: Mapped[bool] = mapped_column("eliminado", Boolean, default=False, nullable=False)
+    created_at: Mapped[datetime] = mapped_column("creado_en", DateTime, nullable=False)

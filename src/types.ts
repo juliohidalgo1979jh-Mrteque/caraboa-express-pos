@@ -195,3 +195,47 @@ export interface Purchase {
   note: string;
   lines: Array<{ itemId: number; itemName: string; unit: StockUnit; quantity: number; unitCost: number; lineTotal: number; expiresOn: string | null }>;
 }
+
+export interface Expense {
+  id: number;
+  kind: 'FIJO' | 'VARIABLE';
+  category: string;
+  description: string;
+  amount: number;
+  paidOn: string;
+  account: AccountKey;
+}
+
+export interface Worker {
+  id: number;
+  name: string;
+  payType: 'DIA' | 'HORA';
+  rate: number;
+  phone: string;
+  active: boolean;
+}
+
+export interface WorkerPayment {
+  id: number;
+  workerId: number;
+  workerName: string;
+  payType: 'DIA' | 'HORA';
+  workedOn: string;
+  units: number;
+  rate: number;
+  amount: number;
+  paidOn: string | null;
+  account: AccountKey | null;
+  note: string;
+  pending: boolean;
+}
+
+export interface ExpenseSummary {
+  month: string;
+  fixed: number;
+  variable: number;
+  staffPaid: number;
+  staffPending: number;
+  purchases: number;
+  total: number;
+}

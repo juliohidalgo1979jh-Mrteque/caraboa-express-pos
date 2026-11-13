@@ -18,6 +18,7 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from .catalog import PRODUCTS, TONES, TRANSLATIONS
 from .models import Base, Category, PointOfSale, Product, ProductImage, ProductText, Sale, Setting, Shift
+from .expenses import register_expense_routes
 from .inventory import deduct_stock_for_sale, register_inventory_routes
 from .kitchen import register_kitchen_routes
 from .points import PAYMENT_METHODS, register_point_routes, seed_points
@@ -472,6 +473,7 @@ def create_app(
 
     register_point_routes(app, get_db, require_admin, local_day_bounds)
     register_inventory_routes(app, get_db, require_admin)
+    register_expense_routes(app, get_db, require_admin)
     register_report_routes(app, get_db, require_admin)
     register_kitchen_routes(app, get_db)
     register_portal_routes(app, get_db, require_admin)
