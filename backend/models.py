@@ -329,3 +329,34 @@ class WorkerPayment(Base):
     note: Mapped[str] = mapped_column("nota", String(200), default="", nullable=False)
     is_deleted: Mapped[bool] = mapped_column("eliminado", Boolean, default=False, nullable=False)
     created_at: Mapped[datetime] = mapped_column("creado_en", DateTime, nullable=False)
+
+
+class AccountMovement(Base):
+    """Movimiento manual de dinero entre cuentas o hacia/desde afuera, y ajustes de arqueo. Monto con signo."""
+
+    __tablename__ = "movimientos_cuenta"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    account: Mapped[str] = mapped_column("cuenta", String(12), nullable=False)
+    # SALDO_INICIAL, TRANSFERENCIA, INGRESO, RETIRO, AJUSTE_ARQUEO
+    kind: Mapped[str] = mapped_column("tipo", String(20), nullable=False)
+    amount: Mapped[Decimal] = mapped_column("monto", Numeric(12, 2), nullable=False)
+    note: Mapped[str] = mapped_column("nota", String(200), default="", nullable=False)
+    moved_on: Mapped[date] = mapped_column("fecha", Date, nullable=False)
+    group_id: Mapped[str | None] = mapped_column("grupo", String(36))
+    created_at: Mapped[datetime] = mapped_column("creado_en", DateTime, nullable=False)
+
+
+class AccountAudit(Base):
+    """Arqueo: lo contado de verdad contra lo que el sistema esperaba en una cuenta."""
+
+    __tablename__ = "arqueos"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    account: Mapped[str] = mapped_column("cuenta", String(12), nullable=False)
+    expected: Mapped[Decimal] = mapped_column("esperado", Numeric(12, 2), nullable=False)
+    counted: Mapped[Decimal] = mapped_column("contado", Numeric(12, 2), nullable=False)
+    difference: Mapped[Decimal] = mapped_column("diferencia", Numeric(12, 2), nullable=False)
+    breakdown: Mapped[str | None] = mapped_column("desglose", String(600))
+    note: Mapped[str] = mapped_column("nota", String(200), default="", nullable=False)
+    created_at: Mapped[datetime] = mapped_column("creado_en", DateTime, nullable=False)

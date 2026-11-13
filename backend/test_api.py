@@ -751,3 +751,36 @@ def test_expenses_workers_and_summary(tmp_path):
         assert s["total"] == 1855.5
         assert c.delete(f"/api/expenses/{e.json()['id']}", headers=owner).status_code == 200
         assert c.get("/api/expenses/summary", headers=owner).json()["fixed"] == 0
+
+
+def test_finance_accounts_audit_and_shifts(tmp_path):
+    from fastapi.testclient import TestClient
+    app = create_app(database_url=f"sqlite:///{tmp_path}/f.db", frontend_dist=None, admin_pin="1111", manager_pin="2222")
+    with TestClient(app) as c:
+        owner, mgr = {"X-Admin-Pin": "1111"}, {"X-Admin-Pin": "2222"}
+        c.post("/api/sync", json={"type": "shift.open", "clientId": "s1", "payload": {"openingCash": 100, "openedAt": "2026-11-12T12:00:00Z", "openingBreakdown": {"100": 1}}})
+        def sale(cid, method, total):
+            return c.post("/api/sync", json={"type": "sale.create", "clientId": cid, "payload": {
+                "uuid_local": cid, "turno_local_id": "s1", "subtotal": total, "propina": 0, "envio": 0, "total": total,
+                "metodo_pago": method, "creado_en": "2026-11-12T13:00:00Z",
+                "detalles": [{"productId": 1, "name": "Pizza", "quantity": 1, "price": total, "subtotal": total}]}})
+        assert sale("a", "EFECTIVO", 25).status_code == 200 and sale("b", "QR", 30).status_code == 200 and sale("m", "MERCADO_PAGO", 40).status_code == 200
+        by = lambda: {a["key"]: a for a in c.get("/api/finance/accounts", headers=mgr).json()["accounts"]}
+        assert (by()["CAJA"]["balance"], by()["BANCO"]["balance"], by()["MERCADOPAGO"]["balance"]) == (25, 30, 40)
+        assert c.put("/api/finance/opening", headers=mgr, json={"start": "2026-11-01", "balances": {"CAJA": 100, "BANCO": 500, "MERCADOPAGO": 0}}).status_code == 403
+        assert c.put("/api/finance/opening", headers=owner, json={"start": "2026-11-01", "balances": {"CAJA": 100, "BANCO": 500, "MERCADOPAGO": 0}}).status_code == 200
+        assert (by()["CAJA"]["balance"], by()["BANCO"]["balance"]) == (125, 530)
+        c.post("/api/expenses", headers=mgr, json={"kind": "FIJO", "category": "Luz", "amount": 20, "paidOn": "2026-11-12"})
+        assert by()["CAJA"]["balance"] == 105
+        assert c.post("/api/finance/transfers", headers=mgr, json={"from": "CAJA", "to": "CAJA", "amount": 5}).status_code == 422
+        assert c.post("/api/finance/transfers", headers=mgr, json={"from": "CAJA", "to": "BANCO", "amount": 50}).status_code == 201
+        assert (by()["CAJA"]["balance"], by()["BANCO"]["balance"]) == (55, 580)
+        c.post("/api/finance/flows", headers=mgr, json={"account": "CAJA", "kind": "RETIRO", "amount": 5, "note": "Retiro del dueño"})
+        result = c.post("/api/finance/audits", headers=mgr, json={"account": "CAJA", "counted": 45, "breakdown": {"20": 2, "5": 1}}).json()
+        assert result["expected"] == 50 and result["difference"] == -5
+        assert by()["CAJA"]["balance"] == 45
+        assert c.get("/api/finance/audits", headers=mgr).json()[0]["breakdown"] == {"20": 2, "5": 1}
+        kinds = [m["kind"] for m in c.get("/api/finance/movements", headers=mgr).json()]
+        assert "AJUSTE_ARQUEO" in kinds and "RETIRO" in kinds and kinds.count("TRANSFERENCIA") == 2
+        shifts = c.get("/api/finance/shifts", headers=mgr).json()
+        assert shifts[0]["openingBreakdown"] == {"100": 1} and shifts[0]["expectedCash"] == 125

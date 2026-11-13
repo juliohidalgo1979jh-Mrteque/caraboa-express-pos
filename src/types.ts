@@ -239,3 +239,57 @@ export interface ExpenseSummary {
   purchases: number;
   total: number;
 }
+
+export interface FinanceAccount {
+  key: AccountKey;
+  label: string;
+  balance: number;
+  initial: number;
+  sales: number;
+  purchases: number;
+  expenses: number;
+  staff: number;
+  movements: number;
+}
+
+export interface FinanceOverview {
+  start: string | null;
+  accounts: FinanceAccount[];
+  total: number;
+}
+
+export interface AccountMovement {
+  id: number;
+  account: AccountKey;
+  kind: 'TRANSFERENCIA' | 'INGRESO' | 'RETIRO' | 'AJUSTE_ARQUEO';
+  amount: number;
+  note: string;
+  movedOn: string;
+  groupId: string | null;
+}
+
+export interface AccountAudit {
+  id: number;
+  account: AccountKey;
+  expected: number;
+  counted: number;
+  difference: number;
+  breakdown: Record<string, number> | null;
+  note: string;
+  createdAt: string;
+}
+
+export interface ShiftClosing {
+  id: number;
+  point: string;
+  state: string;
+  openedAt: string;
+  closedAt: string | null;
+  openingCash: number;
+  cashSales: number;
+  expectedCash: number;
+  closingCash: number | null;
+  difference: number | null;
+  openingBreakdown: Record<string, number> | null;
+  closingBreakdown: Record<string, number> | null;
+}

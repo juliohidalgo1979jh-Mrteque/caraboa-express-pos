@@ -19,6 +19,7 @@ from sqlalchemy.orm import Session, sessionmaker
 from .catalog import PRODUCTS, TONES, TRANSLATIONS
 from .models import Base, Category, PointOfSale, Product, ProductImage, ProductText, Sale, Setting, Shift
 from .expenses import register_expense_routes
+from .finance import register_finance_routes
 from .inventory import deduct_stock_for_sale, register_inventory_routes
 from .kitchen import register_kitchen_routes
 from .points import PAYMENT_METHODS, register_point_routes, seed_points
@@ -359,7 +360,7 @@ def create_app(
         with session_factory() as session:
             yield session
 
-    owner_only_paths = ("/api/points", "/api/portal/settings", "/api/settings/heading", "/api/settings/pix")
+    owner_only_paths = ("/api/points", "/api/portal/settings", "/api/settings/heading", "/api/settings/pix", "/api/finance/opening")
 
     def require_admin(request: Request, x_admin_pin: str = Header(default="")) -> None:
         if not pin:
@@ -474,6 +475,7 @@ def create_app(
     register_point_routes(app, get_db, require_admin, local_day_bounds)
     register_inventory_routes(app, get_db, require_admin)
     register_expense_routes(app, get_db, require_admin)
+    register_finance_routes(app, get_db, require_admin)
     register_report_routes(app, get_db, require_admin)
     register_kitchen_routes(app, get_db)
     register_portal_routes(app, get_db, require_admin)

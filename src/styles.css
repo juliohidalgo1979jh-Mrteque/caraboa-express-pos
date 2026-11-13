@@ -587,3 +587,19 @@ div.modal-copy p { margin: 0 0 8px; }
 .pending-box{display:grid;gap:6px;margin:0 0 12px;padding:12px 14px;border:1px solid #f0cf94;border-radius:12px;background:#fff7e6}
 .pending-row{display:grid;grid-template-columns:1fr auto auto;gap:10px;align-items:center;font-size:13px}
 @media (max-width:700px){.pending-row{grid-template-columns:1fr auto}.pending-row .secondary-button{grid-column:1/-1}}
+
+/* Finanzas */
+.account-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:12px;margin:0 0 12px}
+.account-card{border:1px solid #e6dccb;border-radius:14px;background:#fffdf8;padding:14px;display:grid;gap:8px;align-content:start}
+.account-card header{display:flex;align-items:center;gap:6px;font-size:12px;font-weight:700;letter-spacing:.06em;color:#8a8273;text-transform:uppercase}
+.account-card>strong{font-size:26px}
+.account-card dl{margin:0;display:grid;gap:3px;font-size:12px}
+.account-card dl div{display:flex;justify-content:space-between;gap:8px}
+.account-card dt{color:#8a8273}.account-card dd{margin:0;font-weight:600}
+.account-card.total{background:#fff4e6;border-color:#f0c999}
+.account-card .secondary-button{width:100%}
+.finance-actions{display:flex;gap:8px;flex-wrap:wrap;margin:0 0 14px}
+.negative{color:#b3261e}.positive{color:#1b7a43}
+.breakdown-text{font-size:11px;color:#6d6657}
+.audit-expected{margin:8px 0;font-size:14px}
+.audit-diff{font-weight:700;margin:6px 0}
