@@ -251,7 +251,7 @@ ADDED_COLUMNS = {
         "desglose_apertura": "VARCHAR(600)",
         "desglose_cierre": "VARCHAR(600)",
     },
-    "pedidos_online": {"stock_descontado": "BOOLEAN NOT NULL DEFAULT FALSE", "envio": "NUMERIC(10, 2)", "metodo_pago": "VARCHAR(20)", "venta_id": "INTEGER"},
+    "pedidos_online": {"stock_descontado": "BOOLEAN NOT NULL DEFAULT FALSE", "envio": "NUMERIC(10, 2)", "metodo_pago": "VARCHAR(20)", "venta_id": "INTEGER", "pagado_en": "TIMESTAMP"},
     "proveedores": {"eliminado": "BOOLEAN NOT NULL DEFAULT FALSE"},
     "articulos_stock": {"eliminado": "BOOLEAN NOT NULL DEFAULT FALSE"},
     "movimientos_stock": {"compra_id": "INTEGER", "motivo": "VARCHAR(20)"},

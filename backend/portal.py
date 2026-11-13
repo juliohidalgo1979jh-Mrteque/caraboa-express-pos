@@ -15,7 +15,7 @@ from .models import Category, OnlineOrder, Sale, SaleDetail, Shift, OnlineOrderI
 from .reports import LOCAL_TZ
 
 LANGS = ("es", "pt", "en")
-STATUSES = ("NUEVO", "CONFIRMADO", "LISTO", "ENTREGADO", "CANCELADO")
+STATUSES = ("NUEVO", "CONFIRMADO", "LISTO", "EN_CAMINO", "ENTREGADO", "CANCELADO")
 PROMO_KINDS = ("INFO", "PERCENT", "PERCENT_FIRST")
 DEFAULT_NAME = "Caraboa Express"
 DEFAULT_WHATSAPP = "5548988102993"  # +55 48 98810-2993; se cambia en Portal de pedidos → Enlace y ajustes
@@ -81,7 +81,8 @@ class ProductTextsInput(BaseModel):
 
 
 class StatusInput(BaseModel):
-    status: Literal["NUEVO", "CONFIRMADO", "LISTO", "ENTREGADO", "CANCELADO"] | None = None
+    status: Literal["NUEVO", "CONFIRMADO", "LISTO", "EN_CAMINO", "ENTREGADO", "CANCELADO"] | None = None
+    paid: bool | None = None
     deliveryFee: Decimal | None = Field(default=None, ge=0, le=100000, max_digits=10, decimal_places=2)
     paymentMethod: Literal["EFECTIVO", "TARJETA", "QR", "TRANSFERENCIA", "MERCADO_PAGO"] | None = None
 
@@ -228,6 +229,8 @@ def serialize_order(order: OnlineOrder, items: list[OnlineOrderItem]) -> dict[st
         "deliveryFee": float(order.delivery_fee) if order.delivery_fee is not None else None,
         "total": float(order.total),
         "paymentMethod": order.payment_method,
+        "paid": order.paid_at is not None,
+        "paidAt": order.paid_at.replace(tzinfo=timezone.utc).isoformat() if order.paid_at else None,
         "saleId": order.sale_id,
         "status": order.status,
         "createdAt": order.created_at.replace(tzinfo=timezone.utc).isoformat(),
@@ -439,7 +442,7 @@ def register_portal_routes(app: FastAPI, get_db: Callable[..., Any], require_adm
     def list_orders(scope: Literal["active", "all"] = Query(default="active"), session: Session = Depends(get_db)) -> list[dict[str, Any]]:
         query = select(OnlineOrder).order_by(OnlineOrder.id.desc()).limit(150)
         if scope == "active":
-            query = query.where(OnlineOrder.status.in_(("NUEVO", "CONFIRMADO", "LISTO")))
+            query = query.where(OnlineOrder.status.in_(("NUEVO", "CONFIRMADO", "LISTO", "EN_CAMINO")))
         orders = list(session.scalars(query))
         items: dict[int, list[OnlineOrderItem]] = {order.id: [] for order in orders}
         if orders:
@@ -458,14 +461,29 @@ def register_portal_routes(app: FastAPI, get_db: Callable[..., Any], require_adm
         status = data.status or order.status
         if order.status in ("ENTREGADO", "CANCELADO") and (status != order.status or data.deliveryFee is not None):
             raise HTTPException(status_code=409, detail="Este pedido ya está cerrado")
+        # Primero se cobra: el local confirma el pago (y con qué medio) y recién después se prepara el pedido.
+        if data.paid:
+            if order.paid_at is None:
+                if data.paymentMethod is None:
+                    raise HTTPException(status_code=422, detail="Indica con qué medio pagó el cliente")
+                if order.fulfillment == "ENTREGA" and order.delivery_fee is None:
+                    raise HTTPException(status_code=422, detail="Primero indica el costo del envío para cobrar el total correcto (puede ser 0)")
+                order.paid_at = now_utc()
+                order.payment_method = data.paymentMethod
+        if status in ("CONFIRMADO", "LISTO", "EN_CAMINO", "ENTREGADO") and order.paid_at is None:
+            raise HTTPException(status_code=409, detail="Confirma el pago del cliente antes de preparar el pedido")
+        if status == "EN_CAMINO" and order.fulfillment != "ENTREGA":
+            raise HTTPException(status_code=422, detail="El pedido es para retirar: no va en camino")
         # El envío lo fija el local al ver la dirección; el total del pedido pasa a incluirlo.
         if data.deliveryFee is not None:
+            if order.paid_at is not None and order.delivery_fee is not None and order.total != order.subtotal - order.discount + data.deliveryFee:
+                raise HTTPException(status_code=409, detail="El pedido ya está pagado: no se puede cambiar el envío")
             if order.fulfillment != "ENTREGA":
                 raise HTTPException(status_code=422, detail="El pedido es para retirar: no lleva envío")
             order.delivery_fee = data.deliveryFee
             order.total = order.subtotal - order.discount + data.deliveryFee
         # El stock se descuenta una sola vez, cuando el local acepta el pedido (o lo prepara, si se salteó ese paso).
-        if status in ("CONFIRMADO", "LISTO", "ENTREGADO") and not order.stock_deducted:
+        if status in ("CONFIRMADO", "LISTO", "EN_CAMINO", "ENTREGADO") and not order.stock_deducted:
             deduct_stock_for_sale(session, None, lines, now_utc(), label)
             order.stock_deducted = True
         elif status == "CANCELADO" and order.stock_deducted:
@@ -474,8 +492,6 @@ def register_portal_routes(app: FastAPI, get_db: Callable[..., Any], require_adm
         if status == "ENTREGADO" and order.sale_id is None:
             if order.fulfillment == "ENTREGA" and order.delivery_fee is None:
                 raise HTTPException(status_code=422, detail="Indica el costo del envío antes de marcarlo como entregado (puede ser 0)")
-            if data.paymentMethod is None:
-                raise HTTPException(status_code=422, detail="Indica con qué medio pagó el cliente")
             shift = session.scalars(select(Shift).where(Shift.state == "ABIERTO").order_by(Shift.opened_at.desc())).first()
             if shift is None:
                 raise HTTPException(status_code=409, detail="Abre la caja antes de marcar el pedido como entregado: la venta se registra en el turno abierto")
@@ -483,7 +499,7 @@ def register_portal_routes(app: FastAPI, get_db: Callable[..., Any], require_adm
             now = now_utc()
             sale = Sale(
                 uuid_local=f"online-{order.id}", shift_id=shift.id, subtotal=order.subtotal - order.discount, tip=Decimal("0"),
-                delivery_fee=fee, total=order.subtotal - order.discount + fee, payment_method=data.paymentMethod,
+                delivery_fee=fee, total=order.subtotal - order.discount + fee, payment_method=order.payment_method or "EFECTIVO",
                 point_id=shift.point_id, order_code=order.code, created_at=now,
             )
             session.add(sale)
@@ -491,7 +507,6 @@ def register_portal_routes(app: FastAPI, get_db: Callable[..., Any], require_adm
             session.add_all(SaleDetail(sale_id=sale.id, product_id=item.product_id, product_name=item.name, quantity=item.quantity,
                                        unit_price=item.unit_price, subtotal=item.subtotal) for item in items)
             order.sale_id = sale.id
-            order.payment_method = data.paymentMethod
         order.status = status
         session.commit()
         return serialize_order(order, items)

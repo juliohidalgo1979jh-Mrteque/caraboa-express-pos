@@ -74,11 +74,11 @@ export function buildPixPayload(config: PixConfig, amount: number, txid: string)
 /** Mensaje para el cliente (en portugués, el idioma de la clientela). Incluye código copia y pega y/o enlace. */
 export function pixMessage(config: PixConfig, amountText: string, orderCode: string | null, payload: string | null): string {
   return [
-    '*Caraboa Express* 🍕',
+    '*Caraboa Express*',
     `${orderCode ? `Pedido *${orderCode}* · ` : ''}Total: *${amountText}*`,
     '',
     ...(payload ? ['Pague com *Pix copia e cola* (copie a mensagem abaixo e cole no app do seu banco):', '', payload, ''] : []),
     ...(config.link.trim() ? [`Ou pague pelo link: ${config.link.trim()}`, ''] : []),
-    'Obrigado! Assim que o pagamento cair, preparamos seu pedido. 🙏',
+    'Obrigado! Assim que o pagamento cair, preparamos seu pedido.',
   ].join('\n');
 }

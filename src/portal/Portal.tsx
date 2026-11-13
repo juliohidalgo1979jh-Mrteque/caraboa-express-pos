@@ -81,7 +81,7 @@ function save(key: string, value: string) {
 function whatsappText(order: PlacedOrder, businessName: string, lang: Lang): string {
   const money = (value: number) => formatMoney(value, 'es');
   const lines = [
-    `🍕 *Pedido ${order.code}* · ${businessName}`,
+    `*Pedido ${order.code}* · ${businessName}`,
     `Cliente: ${order.name}`,
     `WhatsApp: ${order.phone.length >= 12 ? '+' : ''}${order.phone}`,
     order.fulfillment === 'ENTREGA' ? `Entrega a domicilio: ${order.address}` : 'Retira en el local',

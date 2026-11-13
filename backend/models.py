@@ -272,6 +272,7 @@ class OnlineOrder(Base):
     delivery_fee: Mapped[Decimal | None] = mapped_column("envio", Numeric(10, 2))  # None = a confirmar
     payment_method: Mapped[str | None] = mapped_column("metodo_pago", String(20))
     sale_id: Mapped[int | None] = mapped_column("venta_id", Integer)
+    paid_at: Mapped[datetime | None] = mapped_column("pagado_en", DateTime)
     created_at: Mapped[datetime] = mapped_column("creado_en", DateTime, nullable=False)
 
 

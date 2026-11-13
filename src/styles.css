@@ -620,3 +620,8 @@ div.modal-copy p { margin: 0 0 8px; }
 .order-alert{flex-wrap:nowrap}
 .order-alert .modal-primary,.order-alert .secondary-button{width:auto;flex:none;min-height:40px;padding:0 14px;white-space:nowrap}
 @media (max-width:560px){.order-alert{flex-wrap:wrap}.order-alert div{flex-basis:calc(100% - 40px)}}
+.order-badges{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
+.order-pay{padding:4px 8px;border-radius:4px;font-size:10px;font-weight:700}
+.order-pay.pending{background:#fde8e6;color:#b3261e}.order-pay.paid{background:#e3f3e8;color:#1b7a43}
+.order-status.en_camino{background:#efe8f7;color:#6b4a93}
+a.order-send-total{text-decoration:none;text-align:center}

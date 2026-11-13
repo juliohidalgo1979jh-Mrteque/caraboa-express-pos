@@ -165,6 +165,9 @@ def test_online_order_deducts_stock_once_when_accepted_and_restores_on_cancel(tm
         placed = client.post("/api/portal/orders", json=order(items=[{"productId": 1, "quantity": 2}])).json()
         assert stock() == 100  # recién llegado: todavía no se descuenta
         oid = placed["id"]
+        assert client.put(f"/api/portal/orders/{oid}", json={"status": "CONFIRMADO"}, headers=PIN).status_code == 409  # sin pago no se prepara
+        assert stock() == 100
+        assert client.put(f"/api/portal/orders/{oid}", json={"paid": True, "paymentMethod": "QR"}, headers=PIN).json()["paid"] is True
         assert client.put(f"/api/portal/orders/{oid}", json={"status": "CONFIRMADO"}, headers=PIN).status_code == 200
         assert stock() == 94
         client.put(f"/api/portal/orders/{oid}", json={"status": "LISTO"}, headers=PIN)
@@ -183,11 +186,19 @@ def test_online_delivery_fee_and_sale_on_delivery(tmp_path):
         assert client.put(f"/api/portal/orders/{pick['id']}", json={"deliveryFee": 5}, headers=PIN).status_code == 422
         fixed = client.put(f"/api/portal/orders/{oid}", json={"deliveryFee": 7.5}, headers=PIN).json()
         assert fixed["deliveryFee"] == 7.5 and fixed["total"] == round(base + 7.5, 2) and fixed["status"] == "NUEVO"
+        # sin pago confirmado no se prepara; el pago exige indicar el medio
+        assert client.put(f"/api/portal/orders/{oid}", json={"status": "CONFIRMADO"}, headers=PIN).status_code == 409
+        assert client.put(f"/api/portal/orders/{oid}", json={"paid": True}, headers=PIN).status_code == 422
+        paid = client.put(f"/api/portal/orders/{oid}", json={"paid": True, "paymentMethod": "QR"}, headers=PIN).json()
+        assert paid["paid"] is True and paid["paymentMethod"] == "QR"
+        assert client.put(f"/api/portal/orders/{oid}", json={"deliveryFee": 1}, headers=PIN).status_code == 409  # ya pagado
+        assert client.put(f"/api/portal/orders/{pick['id']}", json={"status": "EN_CAMINO"}, headers=PIN).status_code in (409, 422)
+        for step in ("CONFIRMADO", "LISTO", "EN_CAMINO"):
+            assert client.put(f"/api/portal/orders/{oid}", json={"status": step}, headers=PIN).json()["status"] == step
         # sin caja abierta no se puede entregar
-        assert client.put(f"/api/portal/orders/{oid}", json={"status": "ENTREGADO", "paymentMethod": "EFECTIVO"}, headers=PIN).status_code == 409
+        assert client.put(f"/api/portal/orders/{oid}", json={"status": "ENTREGADO"}, headers=PIN).status_code == 409
         client.post("/api/sync", json={"type": "shift.open", "clientId": "s1", "payload": {"openingCash": 10, "openedAt": "2026-11-12T12:00:00Z"}})
-        assert client.put(f"/api/portal/orders/{oid}", json={"status": "ENTREGADO"}, headers=PIN).status_code == 422  # falta medio de pago
-        done = client.put(f"/api/portal/orders/{oid}", json={"status": "ENTREGADO", "paymentMethod": "QR"}, headers=PIN).json()
+        done = client.put(f"/api/portal/orders/{oid}", json={"status": "ENTREGADO"}, headers=PIN).json()
         assert done["saleId"] and done["paymentMethod"] == "QR"
         assert client.put(f"/api/portal/orders/{oid}", json={"status": "CANCELADO"}, headers=PIN).status_code == 409
         report = client.get("/api/reports/daily", headers=PIN).json()
