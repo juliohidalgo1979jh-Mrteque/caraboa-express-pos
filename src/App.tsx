@@ -290,7 +290,7 @@ function App() {
         const [latestMenu, latestHeading, latestPoints, latestNumbers] = await Promise.all([refreshMenu(), refreshHeading(), refreshPoints(), refreshOrderNumbers(todayInArgentina())]);
         if (latestMenu) setMenu(latestMenu);
         if (latestHeading) setHeading(latestHeading);
-        void refreshPix().then((latestPix) => { if (latestPix) setPixConfig(latestPix); });
+        void refreshPix().then((latestPix) => { if (latestPix) setPixConfig((current) => (JSON.stringify(current) === JSON.stringify(latestPix) ? current : latestPix)); });
         if (latestPoints) applyPoints(latestPoints);
         if (latestNumbers) setServerOrderNumbers(latestNumbers);
       }

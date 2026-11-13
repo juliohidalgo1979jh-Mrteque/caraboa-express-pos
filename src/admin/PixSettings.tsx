@@ -13,7 +13,9 @@ export function PixSettings({ pin, config, onSaved }: PixSettingsProps) {
   const [draft, setDraft] = useState<PixConfig>(config);
   const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null);
   const [saving, setSaving] = useState(false);
-  useEffect(() => setDraft(config), [config]);
+  // Solo se vuelve a cargar si el servidor trae datos distintos: el refresco automático no debe borrar lo que se está escribiendo.
+  const serverKey = JSON.stringify(config);
+  useEffect(() => setDraft(config), [serverKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function submit() {
     setSaving(true);
