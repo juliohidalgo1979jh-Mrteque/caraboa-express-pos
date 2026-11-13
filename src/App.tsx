@@ -17,6 +17,8 @@ import {
   Coffee,
   CreditCard,
   History,
+  Bell,
+  BellOff,
   Landmark,
   Lock,
   Minus,
@@ -49,6 +51,7 @@ import { RecipesAdmin } from './admin/RecipesAdmin';
 import { ReportsAdmin } from './admin/ReportsAdmin';
 import { PortalAdmin } from './admin/PortalAdmin';
 import { ExpensesAdmin } from './admin/ExpensesAdmin';
+import { useOrderAlerts } from './orderAlerts';
 import { FinanceAdmin } from './admin/FinanceAdmin';
 import { SuppliersAdmin } from './admin/SuppliersAdmin';
 import { KitchenScreen } from './KitchenScreen';
@@ -163,6 +166,7 @@ function App() {
   const [points, setPoints] = useState<PointOfSale[]>(readCachedPoints);
   const [devicePoint, setDevicePoint] = useState<PointOfSale | null>(readDevicePoint);
   const [adminVerified, setAdminVerified] = useState(false);
+  const orderAlerts = useOrderAlerts(isOnline ? adminPin : '', activeScreen === 'portal');
   const allowedMethods = devicePoint?.methods.length ? devicePoint.methods : paymentMethods;
   const [serverOrderNumbers, setServerOrderNumbers] = useState(readCachedOrderNumbers);
   const kitchen = useKitchenStation(isOnline, (comandas) => setToast(`Comanda impresa: ${comandas.map((comanda) => comanda.orderCode).join(', ')}`));
@@ -560,9 +564,12 @@ function App() {
         <div className="sidebar-section-label admin-label">ADMINISTRACIÓN</div>
         <nav className="side-nav" aria-label="Administración">
           {adminScreens.map(({ screen, icon: Icon }) => <button key={screen} className={`nav-item ${activeScreen === screen ? 'active' : ''}`} onClick={() => setActiveScreen(screen)} aria-label={screenTitles[screen]} title={screenTitles[screen]}>
-            <Icon size={18} /><span>{screenTitles[screen]}</span>
+            <Icon size={18} /><span>{screenTitles[screen]}</span>{screen === 'portal' && orderAlerts.newCount > 0 && <b className="nav-badge" aria-label={`${orderAlerts.newCount} pedidos nuevos`}>{orderAlerts.newCount}</b>}
           </button>)}
         </nav>
+        <button className={`sound-toggle ${orderAlerts.soundOn ? 'on' : ''}`} onClick={() => { orderAlerts.unlock(); orderAlerts.toggleSound(); }} aria-pressed={orderAlerts.soundOn} title="Sonido de pedidos online">
+          {orderAlerts.soundOn ? <Bell size={15} /> : <BellOff size={15} />}<span>Sonido de pedidos: {orderAlerts.soundOn ? 'activado' : 'apagado'}</span>
+        </button>
 
         <div className="sidebar-rule" />
         <div className="sidebar-section-label">ESTADO DEL TURNO</div>
@@ -746,6 +753,14 @@ function App() {
       </div>}
 
       {activeShift && <button className="close-shift-button" onClick={() => { setClosingCounts({}); setActiveDialog('close'); }}><Wallet size={16} /> Cerrar turno</button>}
+      {orderAlerts.unseenCount > 0 && activeScreen !== 'portal' && (
+        <div className="order-alert" role="alert">
+          <Bell size={20} />
+          <div><strong>{orderAlerts.unseenCount === 1 ? '¡Pedido online nuevo!' : `¡${orderAlerts.unseenCount} pedidos online nuevos!`}</strong>{orderAlerts.soundOn && !orderAlerts.unlocked && <small>Toca la pantalla para activar el sonido</small>}</div>
+          <button className="modal-primary" onClick={() => { orderAlerts.acknowledge(); setActiveScreen('portal'); }}>Ver pedidos</button>
+          <button className="secondary-button" onClick={orderAlerts.acknowledge}>Silenciar</button>
+        </div>
+      )}
       {toast && <div className="toast" role="status"><CheckCircle2 size={17} />{toast}</div>}
     </div>
   );
