@@ -98,6 +98,8 @@ export interface StockItem {
   active: boolean;
   low: boolean;
   usedIn: string[];
+  nextExpiry?: string | null;
+  expiryStatus?: 'OK' | 'POR_VENCER' | 'VENCIDO' | null;
 }
 
 export interface StockMovement {
@@ -105,7 +107,9 @@ export interface StockMovement {
   itemId: number;
   itemName: string;
   unit: StockUnit;
-  kind: 'COMPRA' | 'AJUSTE' | 'VENTA';
+  kind: 'COMPRA' | 'AJUSTE' | 'VENTA' | 'MERMA';
+  reason?: string | null;
+  purchaseId?: number | null;
   quantity: number;
   unitCost: number | null;
   supplierName: string | null;
@@ -176,4 +180,18 @@ export interface Comanda {
   total: number;
   items: Array<{ name: string; quantity: number; unitPrice: number; subtotal: number }>;
   printedAt: string | null;
+}
+
+export type AccountKey = 'CAJA' | 'BANCO' | 'MERCADOPAGO';
+
+export interface Purchase {
+  id: number;
+  supplierId: number | null;
+  supplierName: string | null;
+  document: string;
+  account: AccountKey;
+  purchasedOn: string;
+  total: number;
+  note: string;
+  lines: Array<{ itemId: number; itemName: string; unit: StockUnit; quantity: number; unitCost: number; lineTotal: number; expiresOn: string | null }>;
 }

@@ -251,6 +251,7 @@ ADDED_COLUMNS = {
     },
     "proveedores": {"eliminado": "BOOLEAN NOT NULL DEFAULT FALSE"},
     "articulos_stock": {"eliminado": "BOOLEAN NOT NULL DEFAULT FALSE"},
+    "movimientos_stock": {"compra_id": "INTEGER", "motivo": "VARCHAR(20)"},
     "ventas": {
         "punto_id": "INTEGER REFERENCES puntos_venta(id)",
         "numero_pedido": "INTEGER",

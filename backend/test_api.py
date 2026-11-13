@@ -694,3 +694,35 @@ def test_shift_breakdown_and_delivery_fee(tmp_path):
             assert '"100":1' in row[0] and "x" not in row[0] and '"0.5":1' in row[0]
             assert '"50":1' in row[1]
             assert float(conn.execute(text("select envio from ventas")).scalar_one()) == 7.0
+
+
+def test_purchase_with_lines_lots_and_waste(tmp_path):
+    from datetime import timedelta
+    from fastapi.testclient import TestClient
+    from backend.inventory import today_local
+    app = create_app(database_url=f"sqlite:///{tmp_path}/c.db", frontend_dist=None, admin_pin="1111", manager_pin="2222")
+    with TestClient(app) as c:
+        h = {"X-Admin-Pin": "2222"}
+        queso = c.post("/api/stock-items", headers=h, json={"kind": "INSUMO", "name": "Queso", "unit": "kg"}).json()
+        cola = c.post("/api/stock-items", headers=h, json={"kind": "PRODUCTO", "name": "Coca-Cola", "unit": "unid"}).json()
+        soon, past = (today_local() + timedelta(days=3)).isoformat(), (today_local() - timedelta(days=1)).isoformat()
+        purchase = c.post("/api/purchases", headers=h, json={"account": "BANCO", "document": "F-1", "lines": [
+            {"itemId": queso["id"], "quantity": 10, "lineTotal": 150, "expiresOn": soon},
+            {"itemId": cola["id"], "quantity": 24, "lineTotal": 96}]})
+        assert purchase.status_code == 201
+        body = purchase.json()
+        assert body["total"] == 246.0 and len(body["lines"]) == 2 and body["lines"][0]["unitCost"] == 15.0
+        assert c.post("/api/purchases", headers=h, json={"lines": []}).status_code == 422
+        assert c.post("/api/purchases", headers=h, json={"lines": [{"itemId": 999, "quantity": 1, "lineTotal": 1}]}).status_code == 404
+        items = {i["name"]: i for i in c.get("/api/stock-items", headers=h).json()}
+        assert items["Queso"]["stock"] == 10 and items["Queso"]["unitCost"] == 15.0
+        assert items["Queso"]["expiryStatus"] == "POR_VENCER" and items["Coca-Cola"]["nextExpiry"] is None
+        waste = c.post("/api/stock-waste", headers=h, json={"itemId": queso["id"], "quantity": 2, "reason": "DANADO", "note": "Se cayó"})
+        assert waste.status_code == 201 and waste.json()["stock"] == 8
+        assert c.post("/api/stock-waste", headers=h, json={"itemId": queso["id"], "quantity": 1, "reason": "X"}).status_code == 422
+        moves = c.get("/api/stock-movements", headers=h).json()
+        merma = next(m for m in moves if m["kind"] == "MERMA")
+        assert merma["quantity"] == -2 and merma["reason"] == "DANADO" and merma["unitCost"] == 15.0
+        c.post("/api/purchases", headers=h, json={"lines": [{"itemId": queso["id"], "quantity": 1, "lineTotal": 10, "expiresOn": past}]})
+        assert {i["name"]: i for i in c.get("/api/stock-items", headers=h).json()}["Queso"]["expiryStatus"] == "VENCIDO"
+        assert len(c.get("/api/purchases", headers=h).json()) == 2

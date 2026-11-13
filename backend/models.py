@@ -158,8 +158,51 @@ class StockMovement(Base):
     unit_cost: Mapped[Decimal | None] = mapped_column("costo_unitario", Numeric(12, 4))
     supplier_id: Mapped[int | None] = mapped_column("proveedor_id", ForeignKey("proveedores.id"))
     sale_id: Mapped[int | None] = mapped_column("venta_id", ForeignKey("ventas.id", ondelete="SET NULL"))
+    purchase_id: Mapped[int | None] = mapped_column("compra_id", Integer)
+    # Para mermas: VENCIDO, DANADO, DERRAMADO, PREPARACION u OTRO.
+    reason: Mapped[str | None] = mapped_column("motivo", String(20))
     note: Mapped[str] = mapped_column("nota", String(200), default="", nullable=False)
     created_at: Mapped[datetime] = mapped_column("creado_en", DateTime, nullable=False)
+
+
+class Purchase(Base):
+    """Una compra (factura o ticket) con varios artículos; su total es la suma de sus líneas."""
+
+    __tablename__ = "compras"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    supplier_id: Mapped[int | None] = mapped_column("proveedor_id", ForeignKey("proveedores.id"))
+    document: Mapped[str] = mapped_column("documento", String(60), default="", nullable=False)
+    # Cuenta de donde salió el dinero: CAJA (efectivo), BANCO o MERCADOPAGO.
+    account: Mapped[str] = mapped_column("cuenta", String(12), default="CAJA", nullable=False)
+    purchased_on: Mapped[date] = mapped_column("fecha", Date, nullable=False)
+    total: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
+    note: Mapped[str] = mapped_column("nota", String(200), default="", nullable=False)
+    created_at: Mapped[datetime] = mapped_column("creado_en", DateTime, nullable=False)
+
+
+class PurchaseLine(Base):
+    __tablename__ = "compras_lineas"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    purchase_id: Mapped[int] = mapped_column("compra_id", ForeignKey("compras.id", ondelete="CASCADE"), nullable=False)
+    item_id: Mapped[int] = mapped_column("articulo_id", ForeignKey("articulos_stock.id"), nullable=False)
+    quantity: Mapped[Decimal] = mapped_column("cantidad", Numeric(12, 3), nullable=False)
+    unit_cost: Mapped[Decimal] = mapped_column("costo_unitario", Numeric(12, 4), nullable=False)
+    line_total: Mapped[Decimal] = mapped_column("total_linea", Numeric(12, 2), nullable=False)
+    expires_on: Mapped[date | None] = mapped_column("vence", Date)
+
+
+class StockLot(Base):
+    """Lote con fecha de vencimiento: lo que queda de una compra. Se consume primero el que vence antes."""
+
+    __tablename__ = "lotes_stock"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    item_id: Mapped[int] = mapped_column("articulo_id", ForeignKey("articulos_stock.id"), nullable=False)
+    purchase_line_id: Mapped[int | None] = mapped_column("compra_linea_id", Integer)
+    quantity: Mapped[Decimal] = mapped_column("cantidad", Numeric(12, 3), nullable=False)
+    expires_on: Mapped[date] = mapped_column("vence", Date, nullable=False)
 
 
 class Equipment(Base):

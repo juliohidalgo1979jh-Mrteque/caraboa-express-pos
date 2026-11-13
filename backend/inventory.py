@@ -8,9 +8,19 @@ from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import delete, func, select, update
 from sqlalchemy.orm import Session
 
-from .models import Equipment, Product, RecipeLine, StockItem, StockMovement, Supplier
+from zoneinfo import ZoneInfo
+
+from .models import Equipment, Product, Purchase, PurchaseLine, RecipeLine, StockItem, StockLot, StockMovement, Supplier
 
 UNITS = ("unid", "kg", "g", "l", "ml")
+ACCOUNTS = ("CAJA", "BANCO", "MERCADOPAGO")
+WASTE_REASONS = ("VENCIDO", "DANADO", "DERRAMADO", "PREPARACION", "OTRO")
+EXPIRY_WARNING_DAYS = 7
+LOCAL_TZ = ZoneInfo("America/Sao_Paulo")
+
+
+def today_local() -> date:
+    return datetime.now(LOCAL_TZ).date()
 EQUIPMENT_STATUSES = ("OPERATIVO", "EN_REPARACION", "FUERA_DE_SERVICIO")
 
 
@@ -61,6 +71,29 @@ class MovementInput(BaseModel):
     note: str = Field(default="", max_length=200)
 
 
+class PurchaseLineInput(BaseModel):
+    item_id: int = Field(alias="itemId")
+    quantity: Decimal = Field(gt=0, max_digits=12, decimal_places=3)
+    line_total: Decimal = Field(alias="lineTotal", ge=0, max_digits=12, decimal_places=2)
+    expires_on: date | None = Field(default=None, alias="expiresOn")
+
+
+class PurchaseInput(BaseModel):
+    supplier_id: int | None = Field(default=None, alias="supplierId")
+    document: str = Field(default="", max_length=60)
+    account: Literal["CAJA", "BANCO", "MERCADOPAGO"] = "CAJA"
+    purchased_on: date | None = Field(default=None, alias="purchasedOn")
+    note: str = Field(default="", max_length=200)
+    lines: list[PurchaseLineInput] = Field(min_length=1, max_length=60)
+
+
+class WasteInput(BaseModel):
+    item_id: int = Field(alias="itemId")
+    quantity: Decimal = Field(gt=0, max_digits=12, decimal_places=3)
+    reason: Literal["VENCIDO", "DANADO", "DERRAMADO", "PREPARACION", "OTRO"]
+    note: str = Field(default="", max_length=200)
+
+
 class RecipeLineInput(BaseModel):
     item_id: int = Field(alias="itemId")
     quantity: Decimal = Field(gt=0, max_digits=12, decimal_places=3)
@@ -94,8 +127,18 @@ def serialize_supplier(supplier: Supplier, item_count: int = 0) -> dict[str, Any
     }
 
 
-def serialize_item(item: StockItem, supplier_name: str | None = None, used_in: list[str] | None = None) -> dict[str, Any]:
+def expiry_status(next_expiry: date | None) -> str | None:
+    if next_expiry is None:
+        return None
+    days = (next_expiry - today_local()).days
+    return "VENCIDO" if days < 0 else "POR_VENCER" if days <= EXPIRY_WARNING_DAYS else "OK"
+
+
+def serialize_item(item: StockItem, supplier_name: str | None = None, used_in: list[str] | None = None,
+                   next_expiry: date | None = None) -> dict[str, Any]:
     return {
+        "nextExpiry": next_expiry.isoformat() if next_expiry else None,
+        "expiryStatus": expiry_status(next_expiry),
         "id": item.id, "kind": item.kind, "name": item.name, "unit": item.unit,
         "stock": float(item.stock), "minStock": float(item.min_stock), "unitCost": float(item.unit_cost),
         "supplierId": item.supplier_id, "supplierName": supplier_name, "active": item.is_active,
@@ -144,6 +187,18 @@ def recipe_summary(session: Session, product: Product) -> dict[str, Any]:
     }
 
 
+def consume_lots(session: Session, item_id: int, quantity: Decimal) -> None:
+    """Descuenta de los lotes con vencimiento, primero el que vence antes."""
+    remaining = quantity
+    for lot in session.scalars(select(StockLot).where(StockLot.item_id == item_id, StockLot.quantity > 0)
+                               .order_by(StockLot.expires_on, StockLot.id)):
+        if remaining <= 0:
+            break
+        take = min(lot.quantity, remaining)
+        lot.quantity -= take
+        remaining -= take
+
+
 def deduct_stock_for_sale(session: Session, sale_id: int, items: list[tuple[int, int]], when: datetime) -> None:
     """Descuenta del inventario lo que lleva cada producto vendido según su receta (el stock puede quedar negativo)."""
     for product_id, quantity in items:
@@ -152,6 +207,7 @@ def deduct_stock_for_sale(session: Session, sale_id: int, items: list[tuple[int,
         ).all():
             used = line.quantity * quantity
             item.stock -= used
+            consume_lots(session, item.id, used)
             session.add(StockMovement(
                 item_id=item.id, kind="VENTA", quantity=-used, unit_cost=item.unit_cost, sale_id=sale_id, created_at=when,
             ))
@@ -222,9 +278,15 @@ def register_inventory_routes(app: FastAPI, get_db: Callable[..., Any], require_
             used.setdefault(line_item_id, []).append(product_name)
         return used
 
+    def next_expiries(session: Session) -> dict[int, date]:
+        return {item_id: expires for item_id, expires in session.execute(
+            select(StockLot.item_id, func.min(StockLot.expires_on)).where(StockLot.quantity > 0).group_by(StockLot.item_id)
+        ).all()}
+
     def item_with_supplier(session: Session, item: StockItem) -> dict[str, Any]:
         supplier = session.get(Supplier, item.supplier_id) if item.supplier_id else None
-        return serialize_item(item, supplier.name if supplier else None, recipes_using(session, item.id).get(item.id))
+        return serialize_item(item, supplier.name if supplier else None, recipes_using(session, item.id).get(item.id),
+                              next_expiries(session).get(item.id))
 
     @app.get("/api/stock-items", dependencies=admin)
     def list_items(session: Session = Depends(get_db)) -> list[dict[str, Any]]:
@@ -233,7 +295,8 @@ def register_inventory_routes(app: FastAPI, get_db: Callable[..., Any], require_
             .where(StockItem.is_deleted.is_(False)).order_by(StockItem.name)
         ).all()
         used = recipes_using(session)
-        return [serialize_item(item, supplier_name, used.get(item.id)) for item, supplier_name in rows]
+        expiries = next_expiries(session)
+        return [serialize_item(item, supplier_name, used.get(item.id), expiries.get(item.id)) for item, supplier_name in rows]
 
     @app.post("/api/stock-items", status_code=201, dependencies=admin)
     def create_item(data: StockItemInput, session: Session = Depends(get_db)) -> dict[str, Any]:
@@ -282,7 +345,7 @@ def register_inventory_routes(app: FastAPI, get_db: Callable[..., Any], require_
         return [{
             "id": m.id, "itemId": m.item_id, "itemName": item_name, "unit": unit, "kind": m.kind,
             "quantity": float(m.quantity), "unitCost": float(m.unit_cost) if m.unit_cost is not None else None,
-            "supplierName": supplier_name, "saleId": m.sale_id, "note": m.note, "createdAt": m.created_at.isoformat() + "Z",
+            "supplierName": supplier_name, "saleId": m.sale_id, "purchaseId": m.purchase_id, "reason": m.reason, "note": m.note, "createdAt": m.created_at.isoformat() + "Z",
         } for m, item_name, unit, supplier_name in session.execute(query).all()]
 
     @app.post("/api/stock-movements", status_code=201, dependencies=admin)
@@ -299,6 +362,8 @@ def register_inventory_routes(app: FastAPI, get_db: Callable[..., Any], require_
                 item.supplier_id = data.supplier_id
         else:
             change = data.quantity - item.stock
+            if change < 0:
+                consume_lots(session, item.id, -change)
         item.stock += change
         session.add(StockMovement(
             item_id=item.id, kind=data.kind, quantity=change,
@@ -306,6 +371,71 @@ def register_inventory_routes(app: FastAPI, get_db: Callable[..., Any], require_
             supplier_id=data.supplier_id if data.kind == "COMPRA" else None,
             note=data.note.strip(), created_at=now_utc(),
         ))
+        session.commit()
+        return item_with_supplier(session, item)
+
+    # --- Compras con varios artículos ---
+    def serialize_purchase(session: Session, purchase: Purchase) -> dict[str, Any]:
+        supplier = session.get(Supplier, purchase.supplier_id) if purchase.supplier_id else None
+        lines = session.execute(
+            select(PurchaseLine, StockItem.name, StockItem.unit).join(StockItem, PurchaseLine.item_id == StockItem.id)
+            .where(PurchaseLine.purchase_id == purchase.id).order_by(PurchaseLine.id)
+        ).all()
+        return {
+            "id": purchase.id, "supplierId": purchase.supplier_id, "supplierName": supplier.name if supplier else None,
+            "document": purchase.document, "account": purchase.account, "purchasedOn": purchase.purchased_on.isoformat(),
+            "total": money(purchase.total), "note": purchase.note,
+            "lines": [{
+                "itemId": line.item_id, "itemName": name, "unit": unit, "quantity": float(line.quantity),
+                "unitCost": float(line.unit_cost), "lineTotal": money(line.line_total),
+                "expiresOn": line.expires_on.isoformat() if line.expires_on else None,
+            } for line, name, unit in lines],
+        }
+
+    @app.get("/api/purchases", dependencies=admin)
+    def list_purchases(limit: int = 100, session: Session = Depends(get_db)) -> list[dict[str, Any]]:
+        rows = session.scalars(select(Purchase).order_by(Purchase.purchased_on.desc(), Purchase.id.desc()).limit(min(max(limit, 1), 500)))
+        return [serialize_purchase(session, purchase) for purchase in rows]
+
+    @app.post("/api/purchases", status_code=201, dependencies=admin)
+    def create_purchase(data: PurchaseInput, session: Session = Depends(get_db)) -> dict[str, Any]:
+        check_supplier(session, data.supplier_id)
+        today = today_local()
+        when = now_utc()
+        purchase = Purchase(supplier_id=data.supplier_id, document=data.document.strip(), account=data.account,
+                            purchased_on=data.purchased_on or today, total=Decimal("0"), note=data.note.strip(), created_at=when)
+        session.add(purchase)
+        session.flush()
+        total = Decimal("0")
+        for line in data.lines:
+            item = get_or_404(session, StockItem, line.item_id, "Artículo")
+            unit_cost = (line.line_total / line.quantity).quantize(Decimal("0.0001"), rounding=ROUND_HALF_UP)
+            row = PurchaseLine(purchase_id=purchase.id, item_id=item.id, quantity=line.quantity, unit_cost=unit_cost,
+                               line_total=line.line_total, expires_on=line.expires_on)
+            session.add(row)
+            session.flush()
+            item.stock += line.quantity
+            item.unit_cost = unit_cost  # El costo pasa a ser el de la última compra.
+            if data.supplier_id is not None:
+                item.supplier_id = data.supplier_id
+            if line.expires_on:
+                session.add(StockLot(item_id=item.id, purchase_line_id=row.id, quantity=line.quantity, expires_on=line.expires_on))
+            session.add(StockMovement(item_id=item.id, kind="COMPRA", quantity=line.quantity, unit_cost=unit_cost,
+                                      supplier_id=data.supplier_id, purchase_id=purchase.id,
+                                      note=data.document.strip()[:200], created_at=when))
+            total += line.line_total
+        purchase.total = total
+        session.commit()
+        return serialize_purchase(session, purchase)
+
+    # --- Mermas: productos dañados, vencidos o perdidos ---
+    @app.post("/api/stock-waste", status_code=201, dependencies=admin)
+    def create_waste(data: WasteInput, session: Session = Depends(get_db)) -> dict[str, Any]:
+        item = get_or_404(session, StockItem, data.item_id, "Artículo")
+        item.stock -= data.quantity
+        consume_lots(session, item.id, data.quantity)
+        session.add(StockMovement(item_id=item.id, kind="MERMA", quantity=-data.quantity, unit_cost=item.unit_cost,
+                                  reason=data.reason, note=data.note.strip(), created_at=now_utc()))
         session.commit()
         return item_with_supplier(session, item)
 

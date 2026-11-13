@@ -564,3 +564,19 @@ div.modal-copy p { margin: 0 0 8px; }
 .delivery-picker{display:grid;gap:8px;margin:10px 0}
 .delivery-toggle{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:600;cursor:pointer}
 .delivery-toggle input{width:18px;height:18px}
+
+/* Compras con varias líneas */
+.modal-wide .purchase-lines{display:grid;gap:8px;margin:6px 0 10px}
+.purchase-line{display:grid;grid-template-columns:minmax(0,2fr) minmax(0,1fr) minmax(0,1fr) minmax(0,1.2fr) 36px;gap:6px;align-items:center}
+.purchase-unit{grid-column:1/-1;color:#6b6458;margin-top:-2px}
+.product-modal.modal-wide{width:min(100%,760px)}
+@media (max-width:700px){.purchase-line{grid-template-columns:1fr 1fr}.purchase-line select{grid-column:1/-1}.purchase-line .icon-button{justify-self:end}}
+.expiry-badge{display:inline-block;margin-left:6px;padding:1px 7px;border-radius:999px;font-size:11px;background:#e8f3ea;color:#2f7d46}
+.expiry-badge.soon{background:#fff0d6;color:#9a5b00}.expiry-badge.expired{background:#fde3df;color:#b3261e}
+.heading-actions{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.inventory-kpis{display:flex;gap:12px;flex-wrap:wrap;margin:0 0 12px}
+.inventory-kpis>div{padding:10px 14px;border:1px solid #e6dccb;border-radius:12px;background:#fffdf8;display:grid;gap:2px}
+.inventory-kpis small{font-size:10px;letter-spacing:.08em;color:#8a8273}.inventory-kpis strong{font-size:17px}
+.purchase-detail td{background:#fffaf2}
+.purchase-detail-line{display:grid;grid-template-columns:2fr 2fr 1.4fr auto;gap:10px;padding:4px 0;font-size:13px}
+.expiry-alert{background:#fff0d6;color:#7a4a00}

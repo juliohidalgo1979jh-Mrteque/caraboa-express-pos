@@ -84,7 +84,7 @@ export function EquipmentAdmin({ pin, onToast }: { pin: string; onToast: (messag
           <div className="method-options" role="group" aria-label="Estado">{(Object.keys(statusLabels) as EquipmentStatus[]).map((status) => <button type="button" key={status} className={draft.status === status ? 'selected' : ''} aria-pressed={draft.status === status} onClick={() => setDraft({ ...draft, status })}>{statusLabels[status]}</button>)}</div>
           <div className="product-form-row">
             <div><label className="field-label" htmlFor="equipment-date">Fecha de compra</label><input id="equipment-date" className="text-input" type="date" value={draft.purchaseDate ?? ''} onChange={(event) => setDraft({ ...draft, purchaseDate: event.target.value || null })} /></div>
-            <div><label className="field-label" htmlFor="equipment-value">Valor</label><div className="money-input"><span>$</span><input id="equipment-value" type="text" inputMode="decimal" autoComplete="off" value={draft.value} onChange={(event) => setDraft({ ...draft, value: event.target.value })} placeholder="0,00" /></div></div>
+            <div><label className="field-label" htmlFor="equipment-value">Valor</label><div className="money-input"><span>R$</span><input id="equipment-value" type="text" inputMode="decimal" autoComplete="off" value={draft.value} onChange={(event) => setDraft({ ...draft, value: event.target.value })} placeholder="0,00" /></div></div>
           </div>
           {text('notes', 'Notas', 'Mantenimiento, garantía, último service…', { maxLength: 300 })}
           {error && <p className="form-error" role="alert">{error}</p>}
