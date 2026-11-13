@@ -10,6 +10,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from .coupons import CouponError, evaluate_code, redeem, release_order
 from .customers import credit_purchase, find_or_create_customer, serialize_reward
 from .inventory import deduct_stock_for_sale, now_utc, restore_stock_for_order
 from .models import Category, OnlineOrder, Sale, SaleDetail, Shift, OnlineOrderItem, Product, ProductText, Promotion, Setting
@@ -34,6 +35,7 @@ class CartLine(BaseModel):
 
 class QuoteInput(BaseModel):
     phone: str = Field(default="", max_length=30)
+    code: str = Field(default="", max_length=30)
     items: list[CartLine] = Field(max_length=MAX_ITEMS)
 
 
@@ -44,6 +46,7 @@ class OrderInput(BaseModel):
     address: str = Field(default="", max_length=200)
     notes: str = Field(default="", max_length=300)
     lang: Literal["es", "pt", "en"] = "es"
+    code: str = Field(default="", max_length=30)
     items: list[CartLine] = Field(min_length=1, max_length=MAX_ITEMS)
 
 
@@ -169,7 +172,7 @@ def is_first_order(session: Session, phone_digits: str) -> bool:
     return not prior
 
 
-def price_cart(session: Session, items: list[CartLine], phone: str) -> dict[str, Any]:
+def price_cart(session: Session, items: list[CartLine], phone: str, code: str = "") -> dict[str, Any]:
     """Calcula el pedido en el servidor: los precios y descuentos nunca los decide el navegador."""
     merged: dict[int, int] = {}
     for line in items:
@@ -203,14 +206,34 @@ def price_cart(session: Session, items: list[CartLine], phone: str) -> dict[str,
         amount = (subtotal * promo.percent / 100).quantize(CENT, rounding=ROUND_HALF_UP)
         if amount > best_amount:
             best, best_amount = promo, amount
+    # Un código (de redes sociales o un premio de fidelidad) no se suma a la promoción automática: se aplica el que más descuenta.
+    coupon: dict[str, Any] | None = None
+    coupon_error = ""
+    coupon_error_text = ""
+    evaluation: dict[str, Any] | None = None
+    if code.strip():
+        try:
+            candidate = evaluate_code(session, code, phone, subtotal)
+        except CouponError as error:
+            coupon_error, coupon_error_text = error.reason, str(error.detail)
+        else:
+            if candidate["discount"] > best_amount or (candidate["gift"] and best_amount == 0):
+                evaluation, best, best_amount = candidate, None, candidate["discount"]
+                coupon = {"code": candidate["code"], "label": candidate["label"], "gift": candidate["gift"]}
+            else:
+                coupon_error, coupon_error_text = "BETTER", "La promoción automática de tu pedido ya descuenta más: el código no se usa"
     total = subtotal - best_amount
     return {
         "lines": lines,
         "subtotal": money(subtotal),
         "discount": money(best_amount),
         "promotion": public_promotion(best) if best is not None else None,
+        "coupon": coupon,
+        "couponError": coupon_error,
+        "couponErrorText": coupon_error_text,
         "total": money(total),
         "firstOrder": first,
+        "_evaluation": evaluation,
     }
 
 
@@ -287,7 +310,9 @@ def register_portal_routes(app: FastAPI, get_db: Callable[..., Any], require_adm
 
     @app.post("/api/portal/quote")
     def portal_quote(data: QuoteInput, session: Session = Depends(get_db)) -> dict[str, Any]:
-        return price_cart(session, data.items, data.phone)
+        priced = price_cart(session, data.items, data.phone, data.code)
+        priced.pop("_evaluation", None)
+        return priced
 
     @app.post("/api/portal/orders", status_code=201)
     def portal_create_order(data: OrderInput, session: Session = Depends(get_db)) -> dict[str, Any]:
@@ -307,7 +332,10 @@ def register_portal_routes(app: FastAPI, get_db: Callable[..., Any], require_adm
         if (recent or 0) >= MAX_PENDING_PER_PHONE:
             raise HTTPException(status_code=429, detail="Ya enviaste varios pedidos. Espera la confirmación del local")
 
-        priced = price_cart(session, data.items, digits)
+        priced = price_cart(session, data.items, digits, data.code)
+        if data.code.strip() and priced["coupon"] is None:
+            raise HTTPException(status_code=422, detail=priced["couponErrorText"] or "El código no es válido")
+        evaluation = priced.pop("_evaluation", None)
         order = OnlineOrder(
             customer_name=name,
             phone=digits,
@@ -318,7 +346,8 @@ def register_portal_routes(app: FastAPI, get_db: Callable[..., Any], require_adm
             lang=data.lang,
             subtotal=Decimal(str(priced["subtotal"])),
             discount=Decimal(str(priced["discount"])),
-            promo_title=priced["promotion"]["title"]["es"] if priced["promotion"] else "",
+            promo_title=priced["promotion"]["title"]["es"] if priced["promotion"] else (priced["coupon"]["label"][:80] if priced["coupon"] else ""),
+            promo_code=priced["coupon"]["code"] if priced["coupon"] else "",
             total=Decimal(str(priced["total"])),
             status="NUEVO",
             created_at=datetime.now(timezone.utc).replace(tzinfo=None),
@@ -326,6 +355,8 @@ def register_portal_routes(app: FastAPI, get_db: Callable[..., Any], require_adm
         session.add(order)
         session.flush()
         order.code = f"W-{order.id:04d}"
+        if evaluation is not None:
+            redeem(session, evaluation, order_id=order.id)
         items = [
             OnlineOrderItem(
                 order_id=order.id,
@@ -339,7 +370,7 @@ def register_portal_routes(app: FastAPI, get_db: Callable[..., Any], require_adm
         ]
         session.add_all(items)
         session.commit()
-        return {**serialize_order(order, items), "promotionTitles": priced["promotion"]["title"] if priced["promotion"] else None}
+        return {**serialize_order(order, items), "promotionTitles": priced["promotion"]["title"] if priced["promotion"] else None, "coupon": priced["coupon"]}
 
     # ---------- Administración (PIN) ----------
 
@@ -491,6 +522,8 @@ def register_portal_routes(app: FastAPI, get_db: Callable[..., Any], require_adm
         elif status == "CANCELADO" and order.stock_deducted:
             restore_stock_for_order(session, lines, now_utc(), f"{label} cancelado")
             order.stock_deducted = False
+        if status == "CANCELADO" and order.status != "CANCELADO":
+            release_order(session, order.id)
         if status == "ENTREGADO" and order.sale_id is None:
             if order.fulfillment == "ENTREGA" and order.delivery_fee is None:
                 raise HTTPException(status_code=422, detail="Indica el costo del envío antes de marcarlo como entregado (puede ser 0)")
@@ -500,7 +533,7 @@ def register_portal_routes(app: FastAPI, get_db: Callable[..., Any], require_adm
             fee = order.delivery_fee or Decimal("0")
             now = now_utc()
             sale = Sale(
-                uuid_local=f"online-{order.id}", shift_id=shift.id, subtotal=order.subtotal - order.discount, tip=Decimal("0"),
+                uuid_local=f"online-{order.id}", shift_id=shift.id, subtotal=order.subtotal, discount=order.discount, promo_code=order.promo_code, tip=Decimal("0"),
                 delivery_fee=fee, total=order.subtotal - order.discount + fee, payment_method=order.payment_method or "EFECTIVO",
                 point_id=shift.point_id, order_code=order.code, created_at=now,
             )

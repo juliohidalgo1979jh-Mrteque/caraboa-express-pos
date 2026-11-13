@@ -81,6 +81,7 @@ def build_report(session: Session, sales: list[Sale], shifts: list[Shift]) -> di
     total = sum((sale.total for sale in sales), ZERO)
     tips = sum((sale.tip for sale in sales), ZERO)
     delivery = sum((sale.delivery_fee for sale in sales), ZERO)
+    discounts = sum((sale.discount for sale in sales), ZERO)
     shift_rows = []
     for shift in sorted(shifts, key=lambda item: item.opened_at):
         expected = shift.opening_cash + cash_by_shift[shift.id]
@@ -106,6 +107,7 @@ def build_report(session: Session, sales: list[Sale], shifts: list[Shift]) -> di
         "total": float(total),
         "tips": float(tips),
         "deliveryFees": float(delivery),
+        "discounts": float(discounts),
         "averageTicket": float(total / len(sales)) if sales else 0.0,
         "cost": float(cost),
         "grossProfit": float(total - tips - delivery - cost) if cost else None,
@@ -119,6 +121,8 @@ def build_report(session: Session, sales: list[Sale], shifts: list[Shift]) -> di
             "time": to_local(sale.created_at).strftime("%H:%M"),
             "point": point_names.get(sale.point_id, "Sin punto"),
             "method": METHOD_LABELS.get(sale.payment_method, sale.payment_method),
+            "discount": float(sale.discount),
+            "code": sale.promo_code,
             "total": float(sale.total),
         } for sale in sorted(sales, key=lambda item: item.created_at)],
     }
@@ -165,6 +169,8 @@ def render_pdf(title: str, subtitle: str, report: dict[str, Any]) -> bytes:
         ["Envíos cobrados (incluidos en el total)", ars(report["deliveryFees"])],
         ["Ticket promedio", ars(report["averageTicket"])],
     ]
+    if report.get("discounts"):
+        summary.insert(4, ["Descuentos otorgados (ya restados del total)", ars(report["discounts"])])
     if report["grossProfit"] is not None:
         summary += [["Costo de mercadería (según recetas)", ars(report["cost"])], ["Ganancia bruta (sin propinas ni envíos)", ars(report["grossProfit"])]]
     story += [Paragraph("Resumen", h2), table(None, summary, [120, 58])]

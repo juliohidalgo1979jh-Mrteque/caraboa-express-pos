@@ -233,3 +233,16 @@ h1, h2, h3 { font-family: var(--display); }
 .thanks-items { border: 2.5px solid var(--ink); background: white; }
 .foot { font-weight: 600; }
 @media (prefers-reduced-motion: reduce) { .hero-cta, .dish, .add, .chips button { transition: none; } }
+
+/* Código promocional */
+.coupon-box { margin: 16px 0 6px; }
+.coupon-box > label { display: block; font-size: 13px; font-weight: 700; margin-bottom: 5px; }
+.coupon-row { display: flex; gap: 8px; }
+.coupon-row input { flex: 1 1 0; width: 0; min-width: 0; padding: 12px; border: 2.5px solid var(--ink); border-radius: 12px; background: white; font-size: 16px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; }
+.coupon-row input::placeholder { font-weight: 400; letter-spacing: 0; text-transform: none; }
+.coupon-row input:focus { outline: 3px solid var(--gold); }
+.coupon-btn { flex-shrink: 0; border: 2.5px solid var(--ink); border-radius: 12px; padding: 0 18px; font-weight: 800; font-size: 15px; background: var(--green); color: white; cursor: pointer; box-shadow: 0 3px 0 var(--ink); }
+.coupon-btn.ghost { background: white; color: var(--ink); }
+.coupon-btn:disabled { opacity: .5; cursor: default; box-shadow: none; }
+.coupon-ok { margin: 8px 0 0; font-size: 13px; font-weight: 600; color: #146c36; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.coupon-err { margin: 8px 0 0; padding: 8px 10px; border-radius: 10px; background: #fff0ec; color: #8a1d0e; font-size: 13px; font-weight: 600; }

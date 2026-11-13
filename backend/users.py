@@ -20,13 +20,13 @@ ROLES = ("DUENO", "ENCARGADO", "CAJERO")
 ROLE_LABELS = {"DUENO": "Dueño", "ENCARGADO": "Encargado", "CAJERO": "Cajero"}
 # Lo que el encargado no puede tocar (salvo leer) y lo único que puede usar el cajero.
 OWNER_ONLY_PATHS = ("/api/points", "/api/portal/settings", "/api/settings/heading", "/api/settings/pix", "/api/finance/opening", "/api/loyalty/config")
-CASHIER_PATHS = ("/api/admin/verify", "/api/portal/orders", "/api/customers", "/api/coupons", "/api/loyalty/rewards")
+CASHIER_PATHS = ("/api/admin/verify", "/api/portal/orders", "/api/customers", "/api/coupons/validate", "/api/loyalty/rewards")
 ACTION_LABELS = (
     ("/api/purchases", "compras"), ("/api/waste", "mermas"), ("/api/stock-items", "inventario"), ("/api/suppliers", "proveedores"),
     ("/api/equipment", "equipos"), ("/api/products", "la carta"), ("/api/expenses", "gastos"), ("/api/workers", "personal"),
     ("/api/worker-payments", "pagos al personal"), ("/api/finance", "finanzas"), ("/api/portal/orders", "pedidos online"),
     ("/api/portal", "portal de pedidos"), ("/api/points", "puntos de venta"), ("/api/settings", "ajustes"), ("/api/users", "usuarios"),
-    ("/api/customers", "clientes"), ("/api/coupons", "cupones"), ("/api/loyalty", "fidelidad"), ("/api/shifts", "turnos"),
+    ("/api/customers", "clientes"), ("/api/promo-codes", "códigos promocionales"), ("/api/loyalty", "fidelidad"), ("/api/shifts", "turnos"),
 )
 VERBS = {"POST": "Registró", "PUT": "Modificó", "DELETE": "Eliminó"}
 MAX_FAILURES, FAILURE_WINDOW, CACHE_SECONDS = 10, 300, 60

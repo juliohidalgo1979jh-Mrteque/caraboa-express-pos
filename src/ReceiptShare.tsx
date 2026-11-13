@@ -23,6 +23,8 @@ export function ticketText(sale: LocalSale): string {
     `${sale.orderCode ? `Pedido *${sale.orderCode}* · ` : ''}${when}`,
     '',
     ...sale.items.map((item) => `${item.quantity} × ${item.name}: ${currency.format(item.subtotal)}`),
+    ...(sale.discount ? [`Descuento${sale.promoCode ? ` (${sale.promoCode})` : ''}: -${currency.format(sale.discount)}`] : []),
+    ...(sale.promoGift ? [`Regalo: ${sale.promoGift}`] : []),
     ...(sale.tip ? [`Propina: ${currency.format(sale.tip)}`] : []),
     ...(sale.deliveryFee ? [`Envío: ${currency.format(sale.deliveryFee)}`] : []),
     `*Total: ${currency.format(sale.total)}* (${paymentLabels[sale.paymentMethod] ?? sale.paymentMethod})`,

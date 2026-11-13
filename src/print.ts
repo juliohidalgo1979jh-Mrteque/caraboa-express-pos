@@ -54,6 +54,8 @@ export function receiptHtml(sale: LocalSale): string {
       ${sale.items.map((item) => `<div class="row"><span>${item.quantity} × ${escapeHtml(item.name)}</span><span>${currency.format(item.subtotal)}</span></div>`).join('')}
       <hr>
       <div class="row"><span>Subtotal</span><span>${currency.format(sale.subtotal)}</span></div>
+      ${sale.discount ? `<div class="row"><span>Descuento${sale.promoCode ? ` (${escapeHtml(sale.promoCode)})` : ''}</span><span>-${currency.format(sale.discount)}</span></div>` : ''}
+      ${sale.promoGift ? `<div class="row"><span>Regalo</span><span>${escapeHtml(sale.promoGift)}</span></div>` : ''}
       ${sale.tip ? `<div class="row"><span>Propina</span><span>${currency.format(sale.tip)}</span></div>` : ''}
       ${sale.deliveryFee ? `<div class="row"><span>Envío</span><span>${currency.format(sale.deliveryFee)}</span></div>` : ''}
       <div class="row total"><span>TOTAL</span><span>${currency.format(sale.total)}</span></div>

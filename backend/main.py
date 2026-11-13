@@ -20,6 +20,7 @@ from .catalog import PRODUCTS, TONES, TRANSLATIONS
 from .models import Base, Category, PointOfSale, Product, ProductImage, ProductText, Sale, Setting, Shift
 from .expenses import register_expense_routes
 from .finance import register_finance_routes
+from .coupons import CouponError, evaluate_code, redeem, register_coupon_routes
 from .customers import credit_purchase, find_or_create_customer, register_customer_routes
 from .users import Auth, register_user_routes
 from .inventory import deduct_stock_for_sale, register_inventory_routes
@@ -253,7 +254,7 @@ ADDED_COLUMNS = {
         "desglose_apertura": "VARCHAR(600)",
         "desglose_cierre": "VARCHAR(600)",
     },
-    "pedidos_online": {"stock_descontado": "BOOLEAN NOT NULL DEFAULT FALSE", "envio": "NUMERIC(10, 2)", "metodo_pago": "VARCHAR(20)", "venta_id": "INTEGER", "pagado_en": "TIMESTAMP"},
+    "pedidos_online": {"stock_descontado": "BOOLEAN NOT NULL DEFAULT FALSE", "envio": "NUMERIC(10, 2)", "metodo_pago": "VARCHAR(20)", "venta_id": "INTEGER", "pagado_en": "TIMESTAMP", "codigo_promo": "VARCHAR(20) NOT NULL DEFAULT ''"},
     "proveedores": {"eliminado": "BOOLEAN NOT NULL DEFAULT FALSE"},
     "articulos_stock": {"eliminado": "BOOLEAN NOT NULL DEFAULT FALSE"},
     "movimientos_stock": {"compra_id": "INTEGER", "motivo": "VARCHAR(20)"},
@@ -264,6 +265,8 @@ ADDED_COLUMNS = {
         "comanda_impresa_en": "TIMESTAMP",
         "envio": "NUMERIC(10, 2) NOT NULL DEFAULT 0",
         "cliente_id": "INTEGER",
+        "descuento": "NUMERIC(10, 2) NOT NULL DEFAULT 0",
+        "codigo_promo": "VARCHAR(20) NOT NULL DEFAULT ''",
     },
     "puntos_venta": {"codigo": "VARCHAR(3)"},
 }
@@ -471,6 +474,7 @@ def create_app(
     register_finance_routes(app, get_db, require_admin)
     register_user_routes(app, get_db, auth)
     register_customer_routes(app, get_db, require_admin)
+    register_coupon_routes(app, get_db, require_admin)
     register_report_routes(app, get_db, require_admin)
     register_kitchen_routes(app, get_db)
     register_portal_routes(app, get_db, require_admin)
@@ -634,11 +638,17 @@ def create_app(
                 raise HTTPException(status_code=422, detail="Método de pago no válido")
             tip = as_money(payload.get("propina", 0), "Propina")
             delivery_fee = as_money(payload.get("envio", 0), "Envío")
-            total = subtotal + tip + delivery_fee
+            discount = as_money(payload.get("descuento", 0), "Descuento")
+            if discount > subtotal:
+                raise HTTPException(status_code=409, detail="El descuento no puede superar el subtotal")
+            if discount > 0 and not str(payload.get("codigo_promo") or "").strip():
+                raise HTTPException(status_code=409, detail="Un descuento necesita un código válido")
+            promo_code = str(payload.get("codigo_promo") or "").strip().upper()[:20] if discount > 0 or payload.get("codigo_promo") else ""
+            total = subtotal - discount + tip + delivery_fee
             if as_money(payload.get("subtotal"), "Subtotal") != subtotal:
                 raise HTTPException(status_code=409, detail="El subtotal de la venta no coincide con sus artículos")
             if as_money(payload.get("total"), "Total") != total:
-                raise HTTPException(status_code=409, detail="El total de la venta no coincide con su subtotal, propina y envío")
+                raise HTTPException(status_code=409, detail="El total de la venta no coincide con su subtotal, descuento, propina y envío")
             created_at = as_datetime(payload.get("creado_en"))
             # Número de pedido que mostró el dispositivo (A-001…); ventas de versiones anteriores no lo traen.
             order_number = payload.get("numero_pedido") if isinstance(payload.get("numero_pedido"), int) and payload["numero_pedido"] > 0 else None
@@ -650,7 +660,8 @@ def create_app(
                 "turno_id": shift.id,
                 "shift_id": shift.id,
                 "subtotal": subtotal,
-                "descuento": Decimal("0.00"),
+                "descuento": discount,
+                "codigo_promo": promo_code,
                 "tip": tip,
                 "propina": tip,
                 "delivery_fee": delivery_fee,
@@ -684,8 +695,19 @@ def create_app(
             deduct_stock_for_sale(
                 session, sale_id, [(detail["producto_id"], detail["cantidad"]) for detail in detail_rows], created_at
             )
+            if promo_code and discount >= 0:
+                # Si el código sigue siendo válido, el descuento debe ser exactamente el calculado por el servidor;
+                # si otra venta se adelantó, la venta ya cobrada se acepta igual (no se pierde dinero cobrado).
+                try:
+                    evaluation = evaluate_code(session, promo_code, str(payload.get("cliente_telefono") or ""), subtotal)
+                except CouponError:
+                    evaluation = None
+                if evaluation is not None:
+                    if evaluation["discount"] != discount:
+                        raise HTTPException(status_code=409, detail="El descuento no coincide con el del código")
+                    redeem(session, evaluation, sale_uuid=operation.client_id)
             if customer is not None:
-                credit_purchase(session, customer, subtotal, created_at)
+                credit_purchase(session, customer, subtotal - discount, created_at)
             session.commit()
         except Exception:
             session.rollback()

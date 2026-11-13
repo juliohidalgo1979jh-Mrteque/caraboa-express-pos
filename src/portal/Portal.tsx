@@ -40,6 +40,8 @@ interface Quote {
   promotion: PortalPromo | null;
   total: number;
   firstOrder: boolean | null;
+  coupon: { code: string; label: string; gift: string } | null;
+  couponError: string;
 }
 
 interface PlacedOrder {
@@ -110,6 +112,8 @@ export default function Portal() {
   const [address, setAddress] = useState(() => readSaved('portal-address'));
   const [notes, setNotes] = useState('');
   const [quote, setQuote] = useState<Quote | null>(null);
+  const [codeInput, setCodeInput] = useState('');
+  const [appliedCode, setAppliedCode] = useState('');
   const [error, setError] = useState('');
   const [sending, setSending] = useState(false);
   const [placed, setPlaced] = useState<PlacedOrder | null>(null);
@@ -159,7 +163,7 @@ export default function Portal() {
         const response = await fetch('/api/portal/quote', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ phone: phoneDigits.length >= 8 ? phoneDigits : '', items: cartLines.map((line) => ({ productId: line.product.id, quantity: line.quantity })) }),
+          body: JSON.stringify({ phone: phoneDigits.length >= 8 ? phoneDigits : '', code: appliedCode, items: cartLines.map((line) => ({ productId: line.product.id, quantity: line.quantity })) }),
         });
         if (response.ok && seq === quoteSeq.current) setQuote(await response.json());
       } catch {
@@ -168,7 +172,7 @@ export default function Portal() {
     }, 250);
     return () => window.clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cartKey, phoneDigits]);
+  }, [cartKey, phoneDigits, appliedCode]);
 
   useEffect(() => {
     if (!sheetOpen) return;
@@ -211,6 +215,7 @@ export default function Portal() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           name: name.trim(), phone: phoneDigits, fulfillment, address: address.trim(), notes: notes.trim(), lang,
+          code: quote?.coupon ? quote.coupon.code : '',
           items: cartLines.map((line) => ({ productId: line.product.id, quantity: line.quantity })),
         }),
       });
@@ -220,6 +225,13 @@ export default function Portal() {
         return;
       }
       if (!response.ok) {
+        // El código pudo gastarse justo antes de enviar: se avisa y se vuelve a calcular sin él.
+        if (response.status === 422 && quote?.coupon) {
+          setError(t.couponErrors.USED);
+          setAppliedCode('');
+          setCodeInput('');
+          return;
+        }
         setError(t.errGeneric);
         return;
       }
@@ -229,6 +241,8 @@ export default function Portal() {
       if (fulfillment === 'ENTREGA') save('portal-address', address.trim());
       setCart({});
       setNotes('');
+      setCodeInput('');
+      setAppliedCode('');
       setSheetOpen(false);
     } catch {
       setError(t.errGeneric);
@@ -379,9 +393,22 @@ export default function Portal() {
                 <dl className="totals">
                   <div><dt>{t.subtotal}</dt><dd>{money(subtotal)}</dd></div>
                   {discount > 0 && quote?.promotion && <div className="discount"><dt>{t.discount} · {quote.promotion.title[lang]}</dt><dd>−{money(discount)}</dd></div>}
+                  {discount > 0 && quote?.coupon && <div className="discount"><dt>{t.discount} · {quote.coupon.label}</dt><dd>−{money(discount)}</dd></div>}
                   <div className="grand"><dt>{t.total}</dt><dd>{money(total)}</dd></div>
                 </dl>
                 {fulfillment === 'ENTREGA' && <p className="hint">{t.deliveryFeeTbd}</p>}
+
+                <div className="coupon-box">
+                  <label htmlFor="portal-code">{t.couponLabel}</label>
+                  <div className="coupon-row">
+                    <input id="portal-code" value={codeInput} onChange={(event) => setCodeInput(event.target.value.toUpperCase())} onKeyDown={(event) => { if (event.key === 'Enter') { event.preventDefault(); setAppliedCode(codeInput.trim()); } }} placeholder={t.couponPlaceholder} maxLength={24} autoComplete="off" />
+                    {quote?.coupon
+                      ? <button type="button" className="coupon-btn ghost" onClick={() => { setAppliedCode(''); setCodeInput(''); }}>{t.couponRemove}</button>
+                      : <button type="button" className="coupon-btn" onClick={() => setAppliedCode(codeInput.trim())} disabled={!codeInput.trim()}>{t.couponApply}</button>}
+                  </div>
+                  {quote?.coupon && <p className="coupon-ok"><Tag size={14} /> {t.couponApplied}: <b>{quote.coupon.label}</b>{quote.coupon.gift ? ` · ${t.couponGift}: ${quote.coupon.gift}` : ''}</p>}
+                  {!quote?.coupon && appliedCode && quote?.couponError && <p className="coupon-err">{t.couponErrors[quote.couponError] ?? t.couponErrors.INVALID}</p>}
+                </div>
 
                 <div className="form">
                   <label>{t.name}<input value={name} onChange={(event) => setName(event.target.value)} autoComplete="name" maxLength={80} /></label>

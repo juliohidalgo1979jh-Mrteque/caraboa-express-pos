@@ -82,6 +82,8 @@ class Sale(Base):
     subtotal: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
     tip: Mapped[Decimal] = mapped_column("propina", Numeric(10, 2), nullable=False, default=Decimal("0.00"))
     delivery_fee: Mapped[Decimal] = mapped_column("envio", Numeric(10, 2), nullable=False, default=Decimal("0.00"))
+    discount: Mapped[Decimal] = mapped_column("descuento", Numeric(10, 2), nullable=False, default=Decimal("0.00"))
+    promo_code: Mapped[str] = mapped_column("codigo_promo", String(20), nullable=False, default="")
     total: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
     customer_id: Mapped[int | None] = mapped_column("cliente_id", Integer)
     payment_method: Mapped[str] = mapped_column("metodo_pago", String(20), nullable=False)
@@ -267,6 +269,7 @@ class OnlineOrder(Base):
     subtotal: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
     discount: Mapped[Decimal] = mapped_column("descuento", Numeric(10, 2), default=Decimal("0"), nullable=False)
     promo_title: Mapped[str] = mapped_column("promocion", String(80), default="", nullable=False)
+    promo_code: Mapped[str] = mapped_column("codigo_promo", String(20), default="", nullable=False)
     total: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
     status: Mapped[str] = mapped_column("estado", String(12), default="NUEVO", nullable=False)
     stock_deducted: Mapped[bool] = mapped_column("stock_descontado", Boolean, default=False, nullable=False)
@@ -428,3 +431,37 @@ class LoyaltyReward(Base):
     status: Mapped[str] = mapped_column("estado", String(12), default="DISPONIBLE", nullable=False)
     created_at: Mapped[datetime] = mapped_column("creado_en", DateTime, nullable=False)
     used_at: Mapped[datetime | None] = mapped_column("usado_en", DateTime)
+
+
+class PromoCode(Base):
+    """Código promocional (redes sociales, campañas): cada persona (por WhatsApp) puede usarlo una sola vez."""
+
+    __tablename__ = "codigos_promo"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    code: Mapped[str] = mapped_column("codigo", String(20), nullable=False, unique=True)
+    label: Mapped[str] = mapped_column("nombre", String(80), default="", nullable=False)
+    kind: Mapped[str] = mapped_column("tipo", String(10), nullable=False)  # PERCENT o AMOUNT
+    value: Mapped[Decimal] = mapped_column("valor", Numeric(10, 2), nullable=False)
+    min_total: Mapped[Decimal] = mapped_column("minimo", Numeric(10, 2), default=Decimal("0"), nullable=False)
+    max_uses: Mapped[int] = mapped_column("usos_maximos", Integer, default=0, nullable=False)  # 0 = sin límite
+    valid_until: Mapped[date | None] = mapped_column("vence", Date)
+    is_active: Mapped[bool] = mapped_column("activo", Boolean, default=True, nullable=False)
+    created_at: Mapped[datetime] = mapped_column("creado_en", DateTime, nullable=False)
+
+
+class PromoRedemption(Base):
+    """Uso de un código (o de un premio de fidelidad) por una persona. Es único por código y WhatsApp."""
+
+    __tablename__ = "canjes_promo"
+    __table_args__ = (UniqueConstraint("codigo_id", "telefono_clave", name="uq_canje_codigo_telefono"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    code_id: Mapped[int | None] = mapped_column("codigo_id", ForeignKey("codigos_promo.id"))
+    reward_id: Mapped[int | None] = mapped_column("premio_id", ForeignKey("premios_fidelidad.id"))
+    phone_key: Mapped[str] = mapped_column("telefono_clave", String(9), nullable=False, index=True)
+    customer_id: Mapped[int | None] = mapped_column("cliente_id", Integer)
+    order_id: Mapped[int | None] = mapped_column("pedido_id", Integer)
+    sale_uuid: Mapped[str | None] = mapped_column("venta_uuid", String(40))
+    amount: Mapped[Decimal] = mapped_column("monto", Numeric(10, 2), default=Decimal("0"), nullable=False)
+    created_at: Mapped[datetime] = mapped_column("creado_en", DateTime, nullable=False)

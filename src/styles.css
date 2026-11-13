@@ -657,3 +657,13 @@ a.order-send-total{text-decoration:none;text-align:center}
 @media (max-width:560px){.customer-fields{grid-template-columns:1fr}.customer-stats{grid-template-columns:1fr 1fr 1fr}}
 .customer-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
 .customer-actions>*{flex:1 1 140px;width:auto;text-decoration:none}
+
+/* Código promocional en la caja */
+.coupon-picker { display: grid; gap: 6px; margin-top: 10px; }
+.coupon-fields { display: flex; gap: 8px; }
+.coupon-fields input { flex: 1; min-width: 0; text-transform: uppercase; letter-spacing: .05em; }
+.coupon-apply { border: 0; border-radius: 10px; padding: 0 16px; font-weight: 800; background: var(--orange, #df5b35); color: #fff; cursor: pointer; }
+.coupon-apply:disabled { opacity: .45; cursor: default; }
+.coupon-ok { margin: 0; font-size: 13px; color: #1b7a43; }
+.pending-box:has(> svg + span){display:flex;align-items:flex-start;gap:10px;font-size:13px;line-height:1.45}
+.pending-box:has(> svg + span) svg{flex-shrink:0;margin-top:2px}

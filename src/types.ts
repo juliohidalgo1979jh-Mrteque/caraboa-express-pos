@@ -50,6 +50,9 @@ export interface LocalSale {
   createdAt: string;
   items: Array<{ productId: number; name: string; quantity: number; price: number; subtotal: number }>;
   subtotal: number;
+  discount?: number;
+  promoCode?: string;
+  promoGift?: string;
   tip: number;
   deliveryFee?: number;
   customerPhone?: string;
