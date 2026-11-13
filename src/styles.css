@@ -544,3 +544,9 @@ div.modal-copy p { margin: 0 0 8px; }
 .pix-settings{margin:8px 32px 32px}
 .pix-settings .muted{font-size:13px;color:#6b6458;margin:0 0 8px}
 @media (max-width:900px){.pix-settings{margin:8px 16px 24px}}
+
+/* Ticket y ventanas altas: el fondo se desplaza completo (rueda del mouse y dedo) y nada queda fuera de pantalla */
+.receipt-backdrop { display: flex; align-items: flex-start; justify-content: center; overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; }
+.receipt-modal { flex: 0 0 auto; margin: auto; max-height: none; overflow: visible; }
+.checkout-modal, .product-modal { max-height: calc(100vh - 24px); max-height: calc(100dvh - 24px); }
+@media print { .receipt-backdrop { display: block; overflow: visible; } }
