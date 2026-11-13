@@ -625,3 +625,8 @@ div.modal-copy p { margin: 0 0 8px; }
 .order-pay.pending{background:#fde8e6;color:#b3261e}.order-pay.paid{background:#e3f3e8;color:#1b7a43}
 .order-status.en_camino{background:#efe8f7;color:#6b4a93}
 a.order-send-total{text-decoration:none;text-align:center}
+
+/* Todos los cuadros emergentes se pueden desplazar con el mouse y el dedo cuando no caben en la pantalla */
+.modal-backdrop { display: flex; align-items: flex-start; justify-content: center; overflow-y: auto; overscroll-behavior: contain; }
+.modal-backdrop > .modal, .modal-backdrop > .product-modal { flex: 0 0 auto; margin: auto; }
+.shift-modal { max-height: none; overflow: visible; }
