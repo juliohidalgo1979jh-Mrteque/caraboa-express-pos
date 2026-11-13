@@ -83,6 +83,7 @@ class Sale(Base):
     tip: Mapped[Decimal] = mapped_column("propina", Numeric(10, 2), nullable=False, default=Decimal("0.00"))
     delivery_fee: Mapped[Decimal] = mapped_column("envio", Numeric(10, 2), nullable=False, default=Decimal("0.00"))
     total: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
+    customer_id: Mapped[int | None] = mapped_column("cliente_id", Integer)
     payment_method: Mapped[str] = mapped_column("metodo_pago", String(20), nullable=False)
     point_id: Mapped[int | None] = mapped_column("punto_id", ForeignKey("puntos_venta.id"))
     order_number: Mapped[int | None] = mapped_column("numero_pedido", Integer)
@@ -392,3 +393,38 @@ class ActionLog(Base):
     method: Mapped[str] = mapped_column("metodo", String(8), nullable=False)
     path: Mapped[str] = mapped_column("ruta", String(160), nullable=False)
     created_at: Mapped[datetime] = mapped_column("creado_en", DateTime, nullable=False, index=True)
+
+
+class Customer(Base):
+    """Cliente identificado por su WhatsApp: historial de compras, preferencias y avance del programa de fidelidad."""
+
+    __tablename__ = "clientes"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    name: Mapped[str] = mapped_column("nombre", String(80), default="", nullable=False)
+    phone: Mapped[str] = mapped_column("telefono", String(20), nullable=False)
+    phone_key: Mapped[str] = mapped_column("telefono_clave", String(9), nullable=False, unique=True, index=True)
+    lang: Mapped[str] = mapped_column("idioma", String(2), default="pt", nullable=False)
+    preferences: Mapped[str] = mapped_column("preferencias", String(300), default="", nullable=False)
+    orders_count: Mapped[int] = mapped_column("compras", Integer, default=0, nullable=False)
+    total_spent: Mapped[Decimal] = mapped_column("total_gastado", Numeric(12, 2), default=Decimal("0"), nullable=False)
+    progress: Mapped[int] = mapped_column("avance_fidelidad", Integer, default=0, nullable=False)
+    rewards_total: Mapped[int] = mapped_column("premios_ganados", Integer, default=0, nullable=False)
+    last_order_at: Mapped[datetime | None] = mapped_column("ultima_compra", DateTime)
+    created_at: Mapped[datetime] = mapped_column("creado_en", DateTime, nullable=False)
+
+
+class LoyaltyReward(Base):
+    """Premio ganado por completar N compras: cupón de descuento o producto de regalo, con un código de un solo uso."""
+
+    __tablename__ = "premios_fidelidad"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    customer_id: Mapped[int] = mapped_column("cliente_id", ForeignKey("clientes.id", ondelete="CASCADE"), nullable=False, index=True)
+    kind: Mapped[str] = mapped_column("tipo", String(10), nullable=False)  # DESCUENTO o REGALO
+    percent: Mapped[Decimal | None] = mapped_column("porcentaje", Numeric(5, 2))
+    gift_name: Mapped[str] = mapped_column("regalo", String(100), default="", nullable=False)
+    code: Mapped[str] = mapped_column("codigo", String(12), nullable=False, unique=True)
+    status: Mapped[str] = mapped_column("estado", String(12), default="DISPONIBLE", nullable=False)
+    created_at: Mapped[datetime] = mapped_column("creado_en", DateTime, nullable=False)
+    used_at: Mapped[datetime | None] = mapped_column("usado_en", DateTime)

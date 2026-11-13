@@ -828,3 +828,49 @@ def test_users_roles_permissions_and_activity(tmp_path):
         for _ in range(10):
             c.post("/api/admin/verify", headers={"X-Admin-Pin": "0000"})
         assert c.post("/api/admin/verify", headers={"X-Admin-Pin": "0000"}).status_code == 429
+
+
+def test_customers_loyalty_and_rewards(tmp_path):
+    from fastapi.testclient import TestClient
+    app = create_app(database_url=f"sqlite:///{tmp_path}/c.db", frontend_dist=None, admin_pin="1111", manager_pin="2222")
+    with TestClient(app) as c:
+        own, mgr = {"X-Admin-Pin": "1111"}, {"X-Admin-Pin": "2222"}
+        c.post("/api/sync", json={"type": "shift.open", "clientId": "s1", "payload": {"openingCash": 10, "openedAt": "2026-11-12T12:00:00Z"}})
+        assert c.get("/api/customers").status_code == 401
+        assert c.put("/api/loyalty/config", headers=mgr, json={"on": True, "every": 3}).status_code == 403  # solo el dueño
+        assert c.put("/api/loyalty/config", headers=own, json={"on": True, "every": 3, "kind": "REGALO", "giftName": ""}).status_code == 422
+        assert c.put("/api/loyalty/config", headers=own, json={"on": True, "every": 3, "kind": "DESCUENTO", "percent": 15}).status_code == 200
+
+        def sale(cid, phone=None, name=None, total=25):
+            payload = {"uuid_local": cid, "turno_local_id": "s1", "subtotal": total, "propina": 0, "envio": 0, "total": total,
+                       "metodo_pago": "EFECTIVO", "creado_en": "2026-11-12T13:00:00Z",
+                       "detalles": [{"productId": 1, "name": "Pizza", "quantity": 1, "price": total, "subtotal": total}]}
+            if phone:
+                payload.update({"cliente_telefono": phone, "cliente_nombre": name})
+            return c.post("/api/sync", json={"type": "sale.create", "clientId": cid, "payload": payload})
+
+        assert sale("a").status_code == 200  # sin teléfono: venta normal, sin cliente
+        assert c.get("/api/customers", headers=mgr).json()["total"] == 0
+        for i in range(2):
+            assert sale(f"b{i}", "+55 48 98810-2993", "Ana").status_code == 200
+        found = c.get("/api/customers/lookup", headers=mgr, params={"phone": "48988102993"}).json()  # mismo número escrito distinto
+        assert found["name"] == "Ana" and found["orders"] == 2 and found["progress"] == 2 and found["every"] == 3 and found["rewards"] == []
+        assert sale("b2", "5548988102993", "Ana").status_code == 200
+        detail = c.get(f"/api/customers/{found['id']}", headers=mgr).json()
+        assert detail["orders"] == 3 and detail["progress"] == 0 and detail["rewardsAvailable"] == 1
+        reward = detail["rewards"][0]
+        assert reward["kind"] == "DESCUENTO" and reward["percent"] == 15 and reward["code"].startswith("FID-") and reward["status"] == "DISPONIBLE"
+        assert detail["topProducts"][0] == {"name": "Pizza", "quantity": 3} and len(detail["recent"]) == 3
+        # duplicado de sincronización: no suma otra compra
+        assert sale("b2", "5548988102993", "Ana").json()["duplicate"] is True
+        assert c.get(f"/api/customers/{found['id']}", headers=mgr).json()["orders"] == 3
+        # usar el premio una sola vez
+        assert c.post(f"/api/loyalty/rewards/{reward['id']}/use", headers=mgr).status_code == 200
+        assert c.post(f"/api/loyalty/rewards/{reward['id']}/use", headers=mgr).status_code == 409
+        # preferencias y búsqueda
+        assert c.put(f"/api/customers/{found['id']}", headers=mgr, json={"name": "Ana Paula", "preferences": "Sin cebolla"}).status_code == 200
+        assert c.get("/api/customers", headers=mgr, params={"q": "paula"}).json()["customers"][0]["preferences"] == "Sin cebolla"
+        assert c.get("/api/customers", headers=mgr, params={"q": "98810"}).json()["total"] == 1
+        assert c.post("/api/customers", headers=mgr, json={"name": "Beto", "phone": "123"}).status_code == 422
+        assert c.delete(f"/api/customers/{found['id']}", headers=mgr).status_code == 403
+        assert c.delete(f"/api/customers/{found['id']}", headers=own).status_code == 200

@@ -10,6 +10,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from .customers import credit_purchase, find_or_create_customer, serialize_reward
 from .inventory import deduct_stock_for_sale, now_utc, restore_stock_for_order
 from .models import Category, OnlineOrder, Sale, SaleDetail, Shift, OnlineOrderItem, Product, ProductText, Promotion, Setting
 from .reports import LOCAL_TZ
@@ -459,6 +460,7 @@ def register_portal_routes(app: FastAPI, get_db: Callable[..., Any], require_adm
         lines = [(item.product_id, item.quantity) for item in items]
         label = f"Pedido online {order.code}"
         status = data.status or order.status
+        reward_info = None
         if order.status in ("ENTREGADO", "CANCELADO") and (status != order.status or data.deliveryFee is not None):
             raise HTTPException(status_code=409, detail="Este pedido ya está cerrado")
         # Primero se cobra: el local confirma el pago (y con qué medio) y recién después se prepara el pedido.
@@ -502,11 +504,16 @@ def register_portal_routes(app: FastAPI, get_db: Callable[..., Any], require_adm
                 delivery_fee=fee, total=order.subtotal - order.discount + fee, payment_method=order.payment_method or "EFECTIVO",
                 point_id=shift.point_id, order_code=order.code, created_at=now,
             )
+            customer = find_or_create_customer(session, order.phone, order.customer_name, order.lang)
+            sale.customer_id = customer.id if customer else None
             session.add(sale)
             session.flush()
+            if customer is not None:
+                reward = credit_purchase(session, customer, order.subtotal - order.discount, now)
+                reward_info = serialize_reward(reward) if reward else None
             session.add_all(SaleDetail(sale_id=sale.id, product_id=item.product_id, product_name=item.name, quantity=item.quantity,
                                        unit_price=item.unit_price, subtotal=item.subtotal) for item in items)
             order.sale_id = sale.id
         order.status = status
         session.commit()
-        return serialize_order(order, items)
+        return {**serialize_order(order, items), "reward": reward_info}

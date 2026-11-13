@@ -20,6 +20,7 @@ from .catalog import PRODUCTS, TONES, TRANSLATIONS
 from .models import Base, Category, PointOfSale, Product, ProductImage, ProductText, Sale, Setting, Shift
 from .expenses import register_expense_routes
 from .finance import register_finance_routes
+from .customers import credit_purchase, find_or_create_customer, register_customer_routes
 from .users import Auth, register_user_routes
 from .inventory import deduct_stock_for_sale, register_inventory_routes
 from .kitchen import register_kitchen_routes
@@ -262,6 +263,7 @@ ADDED_COLUMNS = {
         "codigo_pedido": "VARCHAR(12)",
         "comanda_impresa_en": "TIMESTAMP",
         "envio": "NUMERIC(10, 2) NOT NULL DEFAULT 0",
+        "cliente_id": "INTEGER",
     },
     "puntos_venta": {"codigo": "VARCHAR(3)"},
 }
@@ -468,6 +470,7 @@ def create_app(
     register_expense_routes(app, get_db, require_admin)
     register_finance_routes(app, get_db, require_admin)
     register_user_routes(app, get_db, auth)
+    register_customer_routes(app, get_db, require_admin)
     register_report_routes(app, get_db, require_admin)
     register_kitchen_routes(app, get_db)
     register_portal_routes(app, get_db, require_admin)
@@ -640,6 +643,7 @@ def create_app(
             # Número de pedido que mostró el dispositivo (A-001…); ventas de versiones anteriores no lo traen.
             order_number = payload.get("numero_pedido") if isinstance(payload.get("numero_pedido"), int) and payload["numero_pedido"] > 0 else None
             order_code = str(payload["codigo_pedido"])[:12] if order_number and payload.get("codigo_pedido") else None
+            customer = find_or_create_customer(session, str(payload.get("cliente_telefono") or ""), str(payload.get("cliente_nombre") or ""))
             sales_table = Table("ventas", MetaData(), autoload_with=session.get_bind())
             sale_values = {
                 "uuid_local": operation.client_id,
@@ -658,6 +662,7 @@ def create_app(
                 "punto_id": shift.point_id,
                 "numero_pedido": order_number,
                 "codigo_pedido": order_code,
+                "cliente_id": customer.id if customer else None,
                 "creado_en": created_at,
                 "created_at": created_at,
             }
@@ -679,6 +684,8 @@ def create_app(
             deduct_stock_for_sale(
                 session, sale_id, [(detail["producto_id"], detail["cantidad"]) for detail in detail_rows], created_at
             )
+            if customer is not None:
+                credit_purchase(session, customer, subtotal, created_at)
             session.commit()
         except Exception:
             session.rollback()

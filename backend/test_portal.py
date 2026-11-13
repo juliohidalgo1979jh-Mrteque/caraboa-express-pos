@@ -199,7 +199,9 @@ def test_online_delivery_fee_and_sale_on_delivery(tmp_path):
         assert client.put(f"/api/portal/orders/{oid}", json={"status": "ENTREGADO"}, headers=PIN).status_code == 409
         client.post("/api/sync", json={"type": "shift.open", "clientId": "s1", "payload": {"openingCash": 10, "openedAt": "2026-11-12T12:00:00Z"}})
         done = client.put(f"/api/portal/orders/{oid}", json={"status": "ENTREGADO"}, headers=PIN).json()
-        assert done["saleId"] and done["paymentMethod"] == "QR"
+        assert done["saleId"] and done["paymentMethod"] == "QR" and done["reward"] is None
+        customers = client.get("/api/customers", headers=PIN).json()
+        assert customers["total"] == 1 and customers["customers"][0]["orders"] == 1 and customers["customers"][0]["name"] == "Ana"
         assert client.put(f"/api/portal/orders/{oid}", json={"status": "CANCELADO"}, headers=PIN).status_code == 409
         report = client.get("/api/reports/daily", headers=PIN).json()
         assert report["deliveryFees"] == 7.5 and report["salesCount"] == 1

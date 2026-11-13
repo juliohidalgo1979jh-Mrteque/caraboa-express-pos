@@ -164,7 +164,8 @@ function OrdersTab({ pin, onToast }: { pin: string; onToast: (message: string) =
     const result = await adminRequest<OnlineOrder>(`/api/portal/orders/${order.id}`, 'PUT', body, pin);
     if (!result.ok) { onToast(result.message); return null; }
     setPayFor(null);
-    onToast(`${order.code}: ${done}`);
+    const reward = (result.value as OnlineOrder & { reward?: { code: string } | null }).reward;
+    onToast(reward ? `${order.code}: ${done}. ${order.name} ganó un premio de fidelidad (${reward.code}). Envíaselo desde Clientes.` : `${order.code}: ${done}`);
     void reload();
     return result.value;
   }

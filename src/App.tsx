@@ -18,6 +18,7 @@ import {
   CreditCard,
   History,
   Bell,
+  Heart,
   UserCog,
   LogOut,
   BellOff,
@@ -56,6 +57,7 @@ import { ExpensesAdmin } from './admin/ExpensesAdmin';
 import { useOrderAlerts } from './orderAlerts';
 import { FinanceAdmin } from './admin/FinanceAdmin';
 import { UsersAdmin } from './admin/UsersAdmin';
+import { CustomersAdmin } from './admin/CustomersAdmin';
 import { SuppliersAdmin } from './admin/SuppliersAdmin';
 import { KitchenScreen } from './KitchenScreen';
 import { ReceiptShare } from './ReceiptShare';
@@ -65,7 +67,7 @@ import { currency, formatOrderCode, moneyInputValue, parseMoney, paymentLabels, 
 import { adminRequest, db, deleteProduct, nextOrderNumber, readCachedHeading, readCachedOrderNumbers, readCachedPix, readCachedPoints, readDevicePoint, refreshHeading, refreshPix, refreshMenu, refreshOrderNumbers, refreshPoints, resizeImage, saveHeading, saveProduct, setProductImage, storeDevicePoint, syncQueue } from './db';
 import type { CartItem, LocalSale, LocalShift, PaymentMethod, PointOfSale, PosHeading, Product } from './types';
 
-type Screen = 'pos' | 'history' | 'menu' | 'kitchen' | 'reports' | 'inventory' | 'recipes' | 'suppliers' | 'equipment' | 'points' | 'portal' | 'expenses' | 'finance' | 'users';
+type Screen = 'pos' | 'history' | 'menu' | 'kitchen' | 'reports' | 'inventory' | 'recipes' | 'suppliers' | 'equipment' | 'points' | 'portal' | 'expenses' | 'finance' | 'users' | 'customers';
 type Dialog = 'open' | 'close' | 'checkout' | 'receipt' | 'product' | 'heading' | 'point' | null;
 
 interface ProductDraft {
@@ -95,6 +97,7 @@ const screenTitles: Record<Screen, string> = {
   expenses: 'Gastos y personal',
   finance: 'Finanzas',
   users: 'Usuarios',
+  customers: 'Clientes y fidelidad',
 };
 
 const adminScreens: Array<{ screen: Screen; icon: typeof Package }> = [
@@ -102,6 +105,7 @@ const adminScreens: Array<{ screen: Screen; icon: typeof Package }> = [
   { screen: 'inventory', icon: Package },
   { screen: 'expenses', icon: Receipt },
   { screen: 'finance', icon: Landmark },
+  { screen: 'customers', icon: Heart },
   { screen: 'recipes', icon: Calculator },
   { screen: 'suppliers', icon: Handshake },
   { screen: 'equipment', icon: Wrench },
@@ -173,6 +177,9 @@ function App() {
   const [adminVerified, setAdminVerified] = useState(false);
   const [adminRole, setAdminRole] = useState<'DUENO' | 'ENCARGADO' | 'CAJERO' | null>(null);
   const [adminName, setAdminName] = useState('');
+  const [customerPhone, setCustomerPhone] = useState('');
+  const [customerName, setCustomerName] = useState('');
+  const [customerInfo, setCustomerInfo] = useState<{ name: string; orders: number; progress: number; every: number; rewardsAvailable: number } | null>(null);
   // Si hay una clave guardada y sigue valida, entra sola y se sabe quien es y que perfil tiene.
   useEffect(() => {
     if (!adminPin || !isOnline || adminVerified) return;
@@ -181,6 +188,19 @@ function App() {
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOnline]);
+  // Al escribir el WhatsApp del cliente se muestra su avance en el programa de fidelidad.
+  useEffect(() => {
+    const digits = customerPhone.replace(/\D/g, '');
+    setCustomerInfo(null);
+    if (digits.length < 10 || !adminPin || !isOnline) return undefined;
+    let stopped = false;
+    const timer = window.setTimeout(() => {
+      void adminRequest<{ name: string; orders: number; progress: number; every: number; rewardsAvailable: number } | null>(`/api/customers/lookup?phone=${digits}`, 'GET', undefined, adminPin).then((result) => {
+        if (!stopped && result.ok && result.value) { setCustomerInfo(result.value); if (result.value.name) setCustomerName((current) => current || result.value!.name); }
+      });
+    }, 500);
+    return () => { stopped = true; window.clearTimeout(timer); };
+  }, [customerPhone, adminPin, isOnline]);
   const screenAllowed = (screen: Screen) => (adminRole === 'CAJERO' ? screen === 'portal' : screen === 'users' ? adminRole === 'DUENO' || adminRole === null : true);
   function signOut() { storePin(''); setAdminPin(''); setAdminVerified(false); setAdminRole(null); setAdminName(''); setActiveScreen('pos'); }
   const orderAlerts = useOrderAlerts(isOnline ? adminPin : '', activeScreen === 'portal');
@@ -383,6 +403,8 @@ function App() {
       subtotal: cartTotal,
       tip: tipAmount,
       deliveryFee,
+      customerPhone: customerPhone.replace(/\D/g, '').length >= 8 ? customerPhone.replace(/\D/g, '') : undefined,
+      customerName: customerName.trim() || undefined,
       total: amountDue,
       paymentMethod,
       amountReceived: received,
@@ -411,6 +433,8 @@ function App() {
           detalles: sale.items,
           numero_pedido: sale.orderNumber,
           codigo_pedido: sale.orderCode,
+          cliente_telefono: sale.customerPhone,
+          cliente_nombre: sale.customerName,
         },
       });
     });
@@ -420,6 +444,8 @@ function App() {
     setCashReceived('');
     setDeliveryOn(false);
     setDeliveryText('');
+    setCustomerPhone('');
+    setCustomerName('');
     setActiveDialog('receipt');
     const result = await syncQueue();
     setPendingCount(result.pending);
@@ -654,7 +680,7 @@ function App() {
                 </div>)}
               </div> : <div className="cart-empty"><span className="empty-bag"><ShoppingBag size={25} /></span><strong>Tu pedido empieza aquí</strong><span>Elige algo rico de la carta.</span></div>}
 
-              <div className="order-bottom"><div className="order-summary"><div><span>Subtotal</span><strong>{currency.format(cartTotal)}</strong></div><div><span>Descuento</span><button className="discount-button" onClick={() => setToast('Los descuentos se habilitarán en una próxima fase.')} disabled={!cart.length}>Añadir</button></div><div className="total-row"><span>Total</span><strong>{currency.format(cartTotal)}</strong></div></div><button className="checkout-button" onClick={() => { setPaymentMethod(allowedMethods[0]); setCashReceived(''); setTipRate(null); setCustomTip(''); setDeliveryOn(false); setDeliveryText(''); setActiveDialog('checkout'); }} disabled={!cart.length || !activeShift}><span><CreditCard size={18} />Cobrar pedido</span><span>{currency.format(cartTotal)}<ArrowRight size={16} /></span></button><div className="order-hint"><span>Enter</span> para cobrar <i /> <span>+ −</span> para cantidad</div></div>
+              <div className="order-bottom"><div className="order-summary"><div><span>Subtotal</span><strong>{currency.format(cartTotal)}</strong></div><div><span>Descuento</span><button className="discount-button" onClick={() => setToast('Los descuentos se habilitarán en una próxima fase.')} disabled={!cart.length}>Añadir</button></div><div className="total-row"><span>Total</span><strong>{currency.format(cartTotal)}</strong></div></div><button className="checkout-button" onClick={() => { setPaymentMethod(allowedMethods[0]); setCashReceived(''); setTipRate(null); setCustomTip(''); setDeliveryOn(false); setDeliveryText(''); setCustomerPhone(''); setCustomerName(''); setActiveDialog('checkout'); }} disabled={!cart.length || !activeShift}><span><CreditCard size={18} />Cobrar pedido</span><span>{currency.format(cartTotal)}<ArrowRight size={16} /></span></button><div className="order-hint"><span>Enter</span> para cobrar <i /> <span>+ −</span> para cantidad</div></div>
             </aside>
           </div>
         ) : activeScreen === 'history' ? (
@@ -677,6 +703,7 @@ function App() {
             {activeScreen === 'finance' && <FinanceAdmin pin={adminPin} onToast={setToast} />}
             {activeScreen === 'points' && <><PointsAdmin pin={adminPin} points={points} devicePointId={devicePoint?.id ?? null} onSaved={savePoint} /><PixSettings pin={adminPin} config={pixConfig} onSaved={setPixConfig} /></>}
             {activeScreen === 'users' && <UsersAdmin pin={adminPin} onToast={setToast} />}
+            {activeScreen === 'customers' && <CustomersAdmin pin={adminPin} menu={menu} onToast={setToast} />}
             </>}
           </AdminGate>
         ) : (
@@ -704,7 +731,7 @@ function App() {
           {!devicePoint && <button className="secondary-button point-skip" onClick={() => setActiveDialog('open')}>Continuar sin punto por ahora</button>}
         </section>}
 
-        {activeDialog === 'checkout' && <section className="modal checkout-modal" role="dialog" aria-modal="true" aria-labelledby="checkout-title"><div className="modal-topline"><span className="modal-symbol orange"><CreditCard size={20} /></span><button className="icon-button" onClick={() => setActiveDialog(null)} aria-label="Cerrar"><X size={18} /></button></div><p className="eyebrow">PEDIDO {nextOrderCode}</p><h2 id="checkout-title">Forma de pago</h2><p className="modal-copy">Selecciona cómo recibes el pago.</p><div className="payment-options" role="group" aria-label="Método de pago">{allowedMethods.map((method) => { const Icon = paymentIcons[method]; return <button key={method} className={paymentMethod === method ? 'selected' : ''} onClick={() => setPaymentMethod(method)}><span><Icon size={19} /></span><strong>{paymentLabels[method]}</strong>{paymentMethod === method && <Check size={16} />}</button>; })}</div><div className="tip-picker"><span className="tip-label">Propina <small>opcional</small></span><div className="tip-options"><button className={tipRate === null ? 'selected' : ''} onClick={() => { setTipRate(null); setCustomTip(''); }}>Sin propina</button><button className={tipRate === 10 ? 'selected' : ''} onClick={() => setTipRate(10)}>10%</button><button className={tipRate === 15 ? 'selected' : ''} onClick={() => setTipRate(15)}>15%</button><button className={tipRate === 'custom' ? 'selected' : ''} onClick={() => setTipRate('custom')}>Libre</button></div>{tipRate === 'custom' && <div className="money-input custom-tip-input"><span>R$</span><input aria-label="Propina libre" type="text" inputMode="decimal" autoComplete="off" value={customTip} onChange={(event) => setCustomTip(event.target.value)} placeholder="0,00" /></div>}</div>{paymentMethod === 'QR' && <PixCharge config={pixConfig} amount={amountDue} orderCode={nextOrderCode} onToast={setToast} />}{paymentMethod === 'EFECTIVO' && <><label className="field-label" htmlFor="cash-received">Efectivo recibido <span>BRL</span></label><div className="money-input"><span>R$</span><input id="cash-received" autoFocus type="text" inputMode="decimal" autoComplete="off" value={cashReceived} onChange={(event) => setCashReceived(event.target.value)} placeholder={moneyInputValue(amountDue)} /></div><div className="change-row"><span>Cambio</span><strong>{currency.format(changeDue)}</strong></div></>}<div className="delivery-picker"><label className="delivery-toggle"><input type="checkbox" checked={deliveryOn} onChange={(event) => setDeliveryOn(event.target.checked)} /> Cobrar envío (delivery)</label>{deliveryOn && <div className="money-input"><span>R$</span><input aria-label="Monto del envío" type="text" inputMode="decimal" autoComplete="off" value={deliveryText} onChange={(event) => setDeliveryText(event.target.value)} placeholder="0,00" /></div>}</div><div className="checkout-breakdown"><div><span>Consumo</span><strong>{currency.format(cartTotal)}</strong></div><div><span>Propina</span><strong>{currency.format(tipAmount)}</strong></div>{deliveryFee > 0 && <div><span>Envío</span><strong>{currency.format(deliveryFee)}</strong></div>}</div><div className="checkout-total"><span>Total a cobrar</span><strong>{currency.format(amountDue)}</strong></div><button className="modal-primary" onClick={() => void completeSale()} disabled={paymentMethod === 'EFECTIVO' && (parseMoney(cashReceived) || 0) < amountDue}>Confirmar cobro <CheckCircle2 size={18} /></button><div className="modal-footnote"><Cloud size={14} /> Pago registrado localmente. La integración con terminales se configura aparte.</div></section>}
+        {activeDialog === 'checkout' && <section className="modal checkout-modal" role="dialog" aria-modal="true" aria-labelledby="checkout-title"><div className="modal-topline"><span className="modal-symbol orange"><CreditCard size={20} /></span><button className="icon-button" onClick={() => setActiveDialog(null)} aria-label="Cerrar"><X size={18} /></button></div><p className="eyebrow">PEDIDO {nextOrderCode}</p><h2 id="checkout-title">Forma de pago</h2><p className="modal-copy">Selecciona cómo recibes el pago.</p><div className="payment-options" role="group" aria-label="Método de pago">{allowedMethods.map((method) => { const Icon = paymentIcons[method]; return <button key={method} className={paymentMethod === method ? 'selected' : ''} onClick={() => setPaymentMethod(method)}><span><Icon size={19} /></span><strong>{paymentLabels[method]}</strong>{paymentMethod === method && <Check size={16} />}</button>; })}</div><div className="tip-picker"><span className="tip-label">Propina <small>opcional</small></span><div className="tip-options"><button className={tipRate === null ? 'selected' : ''} onClick={() => { setTipRate(null); setCustomTip(''); }}>Sin propina</button><button className={tipRate === 10 ? 'selected' : ''} onClick={() => setTipRate(10)}>10%</button><button className={tipRate === 15 ? 'selected' : ''} onClick={() => setTipRate(15)}>15%</button><button className={tipRate === 'custom' ? 'selected' : ''} onClick={() => setTipRate('custom')}>Libre</button></div>{tipRate === 'custom' && <div className="money-input custom-tip-input"><span>R$</span><input aria-label="Propina libre" type="text" inputMode="decimal" autoComplete="off" value={customTip} onChange={(event) => setCustomTip(event.target.value)} placeholder="0,00" /></div>}</div>{paymentMethod === 'QR' && <PixCharge config={pixConfig} amount={amountDue} orderCode={nextOrderCode} onToast={setToast} />}{paymentMethod === 'EFECTIVO' && <><label className="field-label" htmlFor="cash-received">Efectivo recibido <span>BRL</span></label><div className="money-input"><span>R$</span><input id="cash-received" autoFocus type="text" inputMode="decimal" autoComplete="off" value={cashReceived} onChange={(event) => setCashReceived(event.target.value)} placeholder={moneyInputValue(amountDue)} /></div><div className="change-row"><span>Cambio</span><strong>{currency.format(changeDue)}</strong></div></>}<div className="delivery-picker"><label className="delivery-toggle"><input type="checkbox" checked={deliveryOn} onChange={(event) => setDeliveryOn(event.target.checked)} /> Cobrar envío (delivery)</label>{deliveryOn && <div className="money-input"><span>R$</span><input aria-label="Monto del envío" type="text" inputMode="decimal" autoComplete="off" value={deliveryText} onChange={(event) => setDeliveryText(event.target.value)} placeholder="0,00" /></div>}</div><div className="customer-picker"><span className="tip-label">Cliente <small>opcional · suma puntos de fidelidad</small></span><div className="customer-fields"><input aria-label="WhatsApp del cliente" type="tel" inputMode="tel" autoComplete="off" placeholder="WhatsApp con código de área" value={customerPhone} onChange={(event) => setCustomerPhone(event.target.value)} /><input aria-label="Nombre del cliente" autoComplete="off" maxLength={80} placeholder="Nombre" value={customerName} onChange={(event) => setCustomerName(event.target.value)} /></div>{customerInfo && <p className="customer-info"><strong>{customerInfo.name || 'Cliente'}</strong> · {customerInfo.orders} compras · {customerInfo.progress} de {customerInfo.every} para el próximo premio{customerInfo.rewardsAvailable > 0 && <b> · tiene {customerInfo.rewardsAvailable} premio(s) disponible(s)</b>}</p>}</div><div className="checkout-breakdown"><div><span>Consumo</span><strong>{currency.format(cartTotal)}</strong></div><div><span>Propina</span><strong>{currency.format(tipAmount)}</strong></div>{deliveryFee > 0 && <div><span>Envío</span><strong>{currency.format(deliveryFee)}</strong></div>}</div><div className="checkout-total"><span>Total a cobrar</span><strong>{currency.format(amountDue)}</strong></div><button className="modal-primary" onClick={() => void completeSale()} disabled={paymentMethod === 'EFECTIVO' && (parseMoney(cashReceived) || 0) < amountDue}>Confirmar cobro <CheckCircle2 size={18} /></button><div className="modal-footnote"><Cloud size={14} /> Pago registrado localmente. La integración con terminales se configura aparte.</div></section>}
 
         {activeDialog === 'product' && draft && <section className="modal product-modal" role="dialog" aria-modal="true" aria-labelledby="product-title">
           <div className="modal-topline"><span className={`cart-thumb ${draft.tone}`}>{draft.image ? <img src={draft.image} alt="" /> : draft.symbol || symbols[0]}</span><button className="icon-button" onClick={() => setActiveDialog(null)} aria-label="Cerrar"><X size={18} /></button></div>

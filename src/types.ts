@@ -52,6 +52,8 @@ export interface LocalSale {
   subtotal: number;
   tip: number;
   deliveryFee?: number;
+  customerPhone?: string;
+  customerName?: string;
   total: number;
   paymentMethod: PaymentMethod;
   amountReceived: number;
@@ -292,4 +294,47 @@ export interface ShiftClosing {
   difference: number | null;
   openingBreakdown: Record<string, number> | null;
   closingBreakdown: Record<string, number> | null;
+}
+
+export interface CustomerReward {
+  id: number;
+  kind: 'DESCUENTO' | 'REGALO';
+  percent: number | null;
+  giftName: string;
+  code: string;
+  status: 'DISPONIBLE' | 'USADO';
+  createdAt: string;
+  usedAt: string | null;
+}
+
+export interface CustomerRow {
+  id: number;
+  name: string;
+  phone: string;
+  lang: 'es' | 'pt' | 'en';
+  preferences: string;
+  orders: number;
+  totalSpent: number;
+  progress: number;
+  every: number;
+  rewardsTotal: number;
+  rewardsAvailable: number;
+  lastOrderAt: string | null;
+}
+
+export interface CustomerDetail extends CustomerRow {
+  loyaltyOn: boolean;
+  rewards: CustomerReward[];
+  topProducts: Array<{ name: string; quantity: number }>;
+  recent: Array<{ id: number; createdAt: string; total: number; paymentMethod: string; orderCode: string | null }>;
+}
+
+export interface LoyaltyConfig {
+  on: boolean;
+  every: number;
+  kind: 'DESCUENTO' | 'REGALO';
+  percent: number;
+  giftId: number | null;
+  giftName: string;
+  min: number;
 }
