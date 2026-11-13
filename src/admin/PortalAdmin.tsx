@@ -113,20 +113,20 @@ function customerMessage(order: OnlineOrder, kind: Notice): string {
   const t = {
     es: {
       hi: `Hola ${order.name}! Recibimos tu pedido *${order.code}*.`, items: 'Productos', fee: 'Envío', total: 'Total a pagar',
-      need: 'Para empezar a prepararlo necesitamos primero el pago.', pix: 'Puedes pagar con *Pix copia e cola* (copia el mensaje de abajo y pégalo en el app de tu banco):',
-      link: 'O paga por este enlace:', ask: 'Responde este mensaje y te pasamos los datos para pagar.', proof: 'Cuando pagues, envíanos el comprobante por este chat y empezamos enseguida.',
+      need: 'Para empezar a prepararlo, indícanos cómo vas a abonar.', pix: 'Puedes pagar con *Pix copia e cola* (copia el mensaje de abajo y pégalo en el app de tu banco):',
+      link: 'O paga por este enlace:', proof: 'Cuando pagues, envíanos el comprobante por este chat y empezamos enseguida.',
       paid: `Pago recibido, gracias! Ya estamos preparando tu pedido *${order.code}*.`, ready: `Tu pedido *${order.code}* está listo. Ya puedes pasar a retirarlo.`, onway: `Tu pedido *${order.code}* va en camino a ${order.address}.`,
     },
     pt: {
       hi: `Olá ${order.name}! Recebemos seu pedido *${order.code}*.`, items: 'Produtos', fee: 'Entrega', total: 'Total a pagar',
-      need: 'Para começar a preparar, precisamos primeiro do pagamento.', pix: 'Você pode pagar com *Pix copia e cola* (copie a mensagem abaixo e cole no app do seu banco):',
-      link: 'Ou pague pelo link:', ask: 'Responda esta mensagem e enviamos os dados para pagamento.', proof: 'Depois de pagar, envie o comprovante aqui no chat e começamos na hora.',
+      need: 'Para começar a preparar, nos diga como vai pagar.', pix: 'Você pode pagar com *Pix copia e cola* (copie a mensagem abaixo e cole no app do seu banco):',
+      link: 'Ou pague pelo link:', proof: 'Depois de pagar, envie o comprovante aqui no chat e começamos na hora.',
       paid: `Pagamento recebido, obrigado! Já estamos preparando seu pedido *${order.code}*.`, ready: `Seu pedido *${order.code}* está pronto. Pode vir retirar.`, onway: `Seu pedido *${order.code}* saiu para entrega em ${order.address}.`,
     },
     en: {
       hi: `Hi ${order.name}! We got your order *${order.code}*.`, items: 'Items', fee: 'Delivery', total: 'Total to pay',
-      need: 'To start preparing it we need the payment first.', pix: 'You can pay with *Pix copy & paste* (copy the message below and paste it in your bank app):',
-      link: 'Or pay with this link:', ask: 'Reply to this message and we will send you the payment details.', proof: 'Once you pay, send us the receipt in this chat and we will start right away.',
+      need: 'To start preparing it, please tell us how you will pay.', pix: 'You can pay with *Pix copy & paste* (copy the message below and paste it in your bank app):',
+      link: 'Or pay with this link:', proof: 'Once you pay, send us the receipt in this chat and we will start right away.',
       paid: `Payment received, thank you! We are now preparing your order *${order.code}*.`, ready: `Your order *${order.code}* is ready. You can come pick it up.`, onway: `Your order *${order.code}* is on its way to ${order.address}.`,
     },
   }[order.lang];
@@ -138,7 +138,7 @@ function customerMessage(order: OnlineOrder, kind: Notice): string {
     t.need,
     ...(payload ? ['', t.pix, '', payload] : []),
     ...(link ? ['', `${t.link} ${link}`] : []),
-    ...(!payload && !link ? ['', t.ask] : ['', t.proof]),
+    ...(payload || link ? ['', t.proof] : []),
   ].join('\n');
 }
 
