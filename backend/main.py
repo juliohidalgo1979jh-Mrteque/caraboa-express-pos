@@ -20,6 +20,7 @@ from .catalog import PRODUCTS, TONES, TRANSLATIONS
 from .models import Base, Category, PointOfSale, Product, ProductImage, ProductText, Sale, Setting, Shift
 from .expenses import register_expense_routes
 from .finance import register_finance_routes
+from .users import Auth, register_user_routes
 from .inventory import deduct_stock_for_sale, register_inventory_routes
 from .kitchen import register_kitchen_routes
 from .points import PAYMENT_METHODS, register_point_routes, seed_points
@@ -361,19 +362,8 @@ def create_app(
         with session_factory() as session:
             yield session
 
-    owner_only_paths = ("/api/points", "/api/portal/settings", "/api/settings/heading", "/api/settings/pix", "/api/finance/opening")
-
-    def require_admin(request: Request, x_admin_pin: str = Header(default="")) -> None:
-        if not pin:
-            return
-        given = x_admin_pin.encode()
-        if secrets.compare_digest(given, pin.encode()):
-            return
-        if mgr_pin and secrets.compare_digest(given, mgr_pin.encode()):
-            if request.method == "DELETE" or request.url.path.startswith(owner_only_paths) and request.method != "GET":
-                raise HTTPException(status_code=403, detail="Esta acción es solo para el administrador")
-            return
-        raise HTTPException(status_code=401, detail="PIN incorrecto")
+    auth = Auth(pin, mgr_pin, session_factory)
+    require_admin = auth.require_admin
 
     def find_or_create_category(session: Session, name: str) -> Category:
         category = session.scalar(select(Category).where(Category.name == name))
@@ -477,6 +467,7 @@ def create_app(
     register_inventory_routes(app, get_db, require_admin)
     register_expense_routes(app, get_db, require_admin)
     register_finance_routes(app, get_db, require_admin)
+    register_user_routes(app, get_db, auth)
     register_report_routes(app, get_db, require_admin)
     register_kitchen_routes(app, get_db)
     register_portal_routes(app, get_db, require_admin)
@@ -496,8 +487,9 @@ def create_app(
         return read_heading(session)
 
     @app.post("/api/admin/verify", dependencies=[Depends(require_admin)])
-    def verify_admin() -> dict[str, bool]:
-        return {"ok": True}
+    def verify_admin(request: Request) -> dict[str, Any]:
+        actor = request.state.actor
+        return {"ok": True, "name": actor.name, "role": actor.role}
 
     @app.post("/api/products", status_code=201, dependencies=[Depends(require_admin)])
     def create_product(data: ProductInput, session: Session = Depends(get_db)) -> dict[str, Any]:

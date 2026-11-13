@@ -784,3 +784,47 @@ def test_finance_accounts_audit_and_shifts(tmp_path):
         assert "AJUSTE_ARQUEO" in kinds and "RETIRO" in kinds and kinds.count("TRANSFERENCIA") == 2
         shifts = c.get("/api/finance/shifts", headers=mgr).json()
         assert shifts[0]["openingBreakdown"] == {"100": 1} and shifts[0]["expectedCash"] == 125
+
+
+def test_users_roles_permissions_and_activity(tmp_path):
+    from fastapi.testclient import TestClient
+    app = create_app(database_url=f"sqlite:///{tmp_path}/u.db", frontend_dist=None, admin_pin="1111", manager_pin="2222")
+    with TestClient(app) as c:
+        owner = {"X-Admin-Pin": "1111"}
+        assert c.get("/api/users").status_code == 401
+        assert c.post("/api/users", headers=owner, json={"name": "Ana", "role": "CAJERO", "pin": "12"}).status_code == 422
+        assert c.post("/api/users", headers=owner, json={"name": "Ana", "role": "CAJERO", "pin": "1111"}).status_code == 409  # igual a la del dueño
+        assert c.post("/api/users", headers=owner, json={"name": "Ana", "role": "CAJERO", "pin": "3333"}).status_code == 201
+        assert c.post("/api/users", headers=owner, json={"name": "Beto", "role": "CAJERO", "pin": "3333"}).status_code == 409
+        beto = c.post("/api/users", headers=owner, json={"name": "Beto", "role": "ENCARGADO", "pin": "4444"}).json()
+        carla = c.post("/api/users", headers=owner, json={"name": "Carla", "role": "DUENO", "pin": "5555"}).json()
+        cajero, enc, dueno2 = {"X-Admin-Pin": "3333"}, {"X-Admin-Pin": "4444"}, {"X-Admin-Pin": "5555"}
+        assert "pinHash" not in str(c.get("/api/users", headers=owner).json())
+        who = c.post("/api/admin/verify", headers=cajero).json()
+        assert who == {"ok": True, "name": "Ana", "role": "CAJERO"}
+        assert c.post("/api/admin/verify", headers=enc).json()["name"] == "Beto"
+        # cajero: solo pedidos online
+        assert c.get("/api/portal/orders", headers=cajero).status_code == 200
+        assert c.get("/api/reports/daily", headers=cajero).status_code == 403
+        assert c.post("/api/expenses", headers=cajero, json={"kind": "FIJO", "category": "Luz", "amount": 5}).status_code == 403
+        # encargado: carga datos, no borra ni gestiona usuarios
+        assert c.post("/api/expenses", headers=enc, json={"kind": "FIJO", "category": "Luz", "amount": 5, "paidOn": "2026-11-12"}).status_code == 201
+        assert c.get("/api/users", headers=enc).status_code == 403
+        assert c.delete("/api/products/1", headers=enc).status_code == 403
+        # segundo dueño: puede todo
+        assert c.get("/api/users", headers=dueno2).status_code == 200
+        # registro de acciones con el nombre
+        log = c.get("/api/users/activity", headers=owner).json()
+        assert any(row["user"] == "Beto" and row["action"] == "Registró gastos" for row in log)
+        # desactivar corta el acceso al instante
+        assert c.put(f"/api/users/{beto['id']}", headers=owner, json={"name": "Beto", "role": "ENCARGADO", "active": False}).status_code == 200
+        assert c.post("/api/admin/verify", headers=enc).status_code == 401
+        # cambiar la clave
+        assert c.put(f"/api/users/{carla['id']}", headers=owner, json={"name": "Carla", "role": "DUENO", "pin": "6666"}).status_code == 200
+        assert c.post("/api/admin/verify", headers=dueno2).status_code == 401
+        assert c.post("/api/admin/verify", headers={"X-Admin-Pin": "6666"}).status_code == 200
+        assert c.delete(f"/api/users/{carla['id']}", headers=owner).status_code == 200
+        # demasiados intentos fallidos
+        for _ in range(10):
+            c.post("/api/admin/verify", headers={"X-Admin-Pin": "0000"})
+        assert c.post("/api/admin/verify", headers={"X-Admin-Pin": "0000"}).status_code == 429

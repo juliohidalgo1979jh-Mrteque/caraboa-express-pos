@@ -18,6 +18,8 @@ import {
   CreditCard,
   History,
   Bell,
+  UserCog,
+  LogOut,
   BellOff,
   Landmark,
   Lock,
@@ -53,16 +55,17 @@ import { PortalAdmin } from './admin/PortalAdmin';
 import { ExpensesAdmin } from './admin/ExpensesAdmin';
 import { useOrderAlerts } from './orderAlerts';
 import { FinanceAdmin } from './admin/FinanceAdmin';
+import { UsersAdmin } from './admin/UsersAdmin';
 import { SuppliersAdmin } from './admin/SuppliersAdmin';
 import { KitchenScreen } from './KitchenScreen';
 import { ReceiptShare } from './ReceiptShare';
 import { useKitchenStation } from './kitchen';
 import { printHtml, receiptHtml } from './print';
 import { currency, formatOrderCode, moneyInputValue, parseMoney, paymentLabels, paymentMethods, products as defaultMenu, symbols, todayInArgentina, tones } from './data';
-import { db, deleteProduct, nextOrderNumber, readCachedHeading, readCachedOrderNumbers, readCachedPix, readCachedPoints, readDevicePoint, refreshHeading, refreshPix, refreshMenu, refreshOrderNumbers, refreshPoints, resizeImage, saveHeading, saveProduct, setProductImage, storeDevicePoint, syncQueue } from './db';
+import { adminRequest, db, deleteProduct, nextOrderNumber, readCachedHeading, readCachedOrderNumbers, readCachedPix, readCachedPoints, readDevicePoint, refreshHeading, refreshPix, refreshMenu, refreshOrderNumbers, refreshPoints, resizeImage, saveHeading, saveProduct, setProductImage, storeDevicePoint, syncQueue } from './db';
 import type { CartItem, LocalSale, LocalShift, PaymentMethod, PointOfSale, PosHeading, Product } from './types';
 
-type Screen = 'pos' | 'history' | 'menu' | 'kitchen' | 'reports' | 'inventory' | 'recipes' | 'suppliers' | 'equipment' | 'points' | 'portal' | 'expenses' | 'finance';
+type Screen = 'pos' | 'history' | 'menu' | 'kitchen' | 'reports' | 'inventory' | 'recipes' | 'suppliers' | 'equipment' | 'points' | 'portal' | 'expenses' | 'finance' | 'users';
 type Dialog = 'open' | 'close' | 'checkout' | 'receipt' | 'product' | 'heading' | 'point' | null;
 
 interface ProductDraft {
@@ -91,6 +94,7 @@ const screenTitles: Record<Screen, string> = {
   portal: 'Portal de pedidos',
   expenses: 'Gastos y personal',
   finance: 'Finanzas',
+  users: 'Usuarios',
 };
 
 const adminScreens: Array<{ screen: Screen; icon: typeof Package }> = [
@@ -103,6 +107,7 @@ const adminScreens: Array<{ screen: Screen; icon: typeof Package }> = [
   { screen: 'equipment', icon: Wrench },
   { screen: 'points', icon: MonitorSmartphone },
   { screen: 'portal', icon: Globe },
+  { screen: 'users', icon: UserCog },
 ];
 
 const paymentIcons: Record<PaymentMethod, typeof CreditCard> = {
@@ -166,6 +171,18 @@ function App() {
   const [points, setPoints] = useState<PointOfSale[]>(readCachedPoints);
   const [devicePoint, setDevicePoint] = useState<PointOfSale | null>(readDevicePoint);
   const [adminVerified, setAdminVerified] = useState(false);
+  const [adminRole, setAdminRole] = useState<'DUENO' | 'ENCARGADO' | 'CAJERO' | null>(null);
+  const [adminName, setAdminName] = useState('');
+  // Si hay una clave guardada y sigue valida, entra sola y se sabe quien es y que perfil tiene.
+  useEffect(() => {
+    if (!adminPin || !isOnline || adminVerified) return;
+    void adminRequest<{ ok: boolean; name: string; role: string }>('/api/admin/verify', 'POST', undefined, adminPin).then((result) => {
+      if (result.ok) { setAdminVerified(true); setAdminRole(result.value.role as 'DUENO' | 'ENCARGADO' | 'CAJERO'); setAdminName(result.value.name); }
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOnline]);
+  const screenAllowed = (screen: Screen) => (adminRole === 'CAJERO' ? screen === 'portal' : screen === 'users' ? adminRole === 'DUENO' || adminRole === null : true);
+  function signOut() { storePin(''); setAdminPin(''); setAdminVerified(false); setAdminRole(null); setAdminName(''); setActiveScreen('pos'); }
   const orderAlerts = useOrderAlerts(isOnline ? adminPin : '', activeScreen === 'portal');
   const allowedMethods = devicePoint?.methods.length ? devicePoint.methods : paymentMethods;
   const [serverOrderNumbers, setServerOrderNumbers] = useState(readCachedOrderNumbers);
@@ -563,10 +580,11 @@ function App() {
 
         <div className="sidebar-section-label admin-label">ADMINISTRACIÓN</div>
         <nav className="side-nav" aria-label="Administración">
-          {adminScreens.map(({ screen, icon: Icon }) => <button key={screen} className={`nav-item ${activeScreen === screen ? 'active' : ''}`} onClick={() => setActiveScreen(screen)} aria-label={screenTitles[screen]} title={screenTitles[screen]}>
+          {adminScreens.filter(({ screen }) => screen !== 'users' || adminRole === 'DUENO' || adminRole === null).filter(({ screen }) => adminRole !== 'CAJERO' || screen === 'portal').map(({ screen, icon: Icon }) => <button key={screen} className={`nav-item ${activeScreen === screen ? 'active' : ''}`} onClick={() => setActiveScreen(screen)} aria-label={screenTitles[screen]} title={screenTitles[screen]}>
             <Icon size={18} /><span>{screenTitles[screen]}</span>{screen === 'portal' && orderAlerts.newCount > 0 && <b className="nav-badge" aria-label={`${orderAlerts.newCount} pedidos nuevos`}>{orderAlerts.newCount}</b>}
           </button>)}
         </nav>
+        {adminVerified && adminRole && <div className="session-box"><span><strong>{adminName}</strong><small>{adminRole === 'DUENO' ? 'Dueño' : adminRole === 'ENCARGADO' ? 'Encargado' : 'Cajero'}</small></span><button onClick={signOut} title="Cerrar sesión" aria-label="Cerrar sesión"><LogOut size={15} /></button></div>}
         <button className={`sound-toggle ${orderAlerts.soundOn ? 'on' : ''}`} onClick={() => { orderAlerts.unlock(); orderAlerts.toggleSound(); }} aria-pressed={orderAlerts.soundOn} title="Sonido de pedidos online">
           {orderAlerts.soundOn ? <Bell size={15} /> : <BellOff size={15} />}<span>Sonido de pedidos: {orderAlerts.soundOn ? 'activado' : 'apagado'}</span>
         </button>
@@ -647,7 +665,8 @@ function App() {
         ) : activeScreen === 'kitchen' ? (
           <KitchenScreen station={kitchen} />
         ) : activeScreen !== 'menu' ? (
-          <AdminGate pin={adminPin} onPinChange={setAdminPin} verified={adminVerified} onVerified={() => { setAdminVerified(true); storePin(adminPin); }} isOnline={isOnline}>
+          <AdminGate pin={adminPin} onPinChange={setAdminPin} verified={adminVerified} onVerified={(info) => { setAdminVerified(true); setAdminRole(info.role as 'DUENO' | 'ENCARGADO' | 'CAJERO'); setAdminName(info.name); storePin(adminPin); }} isOnline={isOnline}>
+            {!screenAllowed(activeScreen) ? <div className="admin-gate"><span className="empty-bag"><Lock size={24} /></span><strong>Sin permiso</strong><span>Tu perfil no tiene acceso a esta sección.</span></div> : <>
             {activeScreen === 'reports' && <ReportsAdmin pin={adminPin} points={points} />}
             {activeScreen === 'inventory' && <InventoryAdmin pin={adminPin} onToast={setToast} />}
             {activeScreen === 'recipes' && <RecipesAdmin pin={adminPin} menu={menu} onProductSaved={(saved) => setMenu((items) => items.map((item) => (item.id === saved.id ? saved : item)))} onProductDeleted={removeProduct} onToast={setToast} />}
@@ -657,6 +676,8 @@ function App() {
             {activeScreen === 'expenses' && <ExpensesAdmin pin={adminPin} onToast={setToast} />}
             {activeScreen === 'finance' && <FinanceAdmin pin={adminPin} onToast={setToast} />}
             {activeScreen === 'points' && <><PointsAdmin pin={adminPin} points={points} devicePointId={devicePoint?.id ?? null} onSaved={savePoint} /><PixSettings pin={adminPin} config={pixConfig} onSaved={setPixConfig} /></>}
+            {activeScreen === 'users' && <UsersAdmin pin={adminPin} onToast={setToast} />}
+            </>}
           </AdminGate>
         ) : (
           <section className="history-page menu-page">

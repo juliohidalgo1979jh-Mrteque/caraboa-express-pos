@@ -365,3 +365,30 @@ class AccountAudit(Base):
     breakdown: Mapped[str | None] = mapped_column("desglose", String(600))
     note: Mapped[str] = mapped_column("nota", String(200), default="", nullable=False)
     created_at: Mapped[datetime] = mapped_column("creado_en", DateTime, nullable=False)
+
+
+class AppUser(Base):
+    """Persona con nombre, perfil (DUENO, ENCARGADO, CAJERO) y clave propia para entrar a la administración."""
+
+    __tablename__ = "usuarios_app"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    name: Mapped[str] = mapped_column("nombre", String(60), nullable=False)
+    role: Mapped[str] = mapped_column("perfil", String(12), nullable=False)
+    pin_hash: Mapped[str] = mapped_column("clave_hash", String(200), nullable=False)
+    is_active: Mapped[bool] = mapped_column("activo", Boolean, default=True, nullable=False)
+    created_at: Mapped[datetime] = mapped_column("creado_en", DateTime, nullable=False)
+    last_login_at: Mapped[datetime | None] = mapped_column("ultimo_ingreso", DateTime)
+
+
+class ActionLog(Base):
+    """Quién hizo qué: cada cambio hecho desde la administración queda registrado con el nombre de la persona."""
+
+    __tablename__ = "registro_acciones"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_name: Mapped[str] = mapped_column("usuario", String(60), nullable=False)
+    role: Mapped[str] = mapped_column("perfil", String(12), nullable=False)
+    method: Mapped[str] = mapped_column("metodo", String(8), nullable=False)
+    path: Mapped[str] = mapped_column("ruta", String(160), nullable=False)
+    created_at: Mapped[datetime] = mapped_column("creado_en", DateTime, nullable=False, index=True)

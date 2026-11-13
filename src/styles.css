@@ -630,3 +630,6 @@ a.order-send-total{text-decoration:none;text-align:center}
 .modal-backdrop { display: flex; align-items: flex-start; justify-content: center; overflow-y: auto; overscroll-behavior: contain; }
 .modal-backdrop > .modal, .modal-backdrop > .product-modal { flex: 0 0 auto; margin: auto; }
 .shift-modal { max-height: none; overflow: visible; }
+.session-box{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:6px 10px 0;padding:8px 10px;border:1px solid #e2e0d8;border-radius:6px;background:#fffefa;font-size:11px}
+.session-box span{display:grid;gap:1px}.session-box small{color:#8a8273}
+.session-box button{display:grid;place-items:center;width:28px;height:28px;border:1px solid #e2e0d8;border-radius:6px;background:#fff;color:#71736d;cursor:pointer}

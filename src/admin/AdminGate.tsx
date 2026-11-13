@@ -6,7 +6,7 @@ interface AdminGateProps {
   pin: string;
   onPinChange: (pin: string) => void;
   verified: boolean;
-  onVerified: () => void;
+  onVerified: (info: { name: string; role: string }) => void;
   isOnline: boolean;
   children: ReactNode;
 }
@@ -18,9 +18,9 @@ export function AdminGate({ pin, onPinChange, verified, onVerified, isOnline, ch
 
   async function verify(showError: boolean) {
     setChecking(true);
-    const result = await adminRequest<{ ok: boolean }>('/api/admin/verify', 'POST', undefined, pin);
+    const result = await adminRequest<{ ok: boolean; name: string; role: string }>('/api/admin/verify', 'POST', undefined, pin);
     setChecking(false);
-    if (result.ok) onVerified();
+    if (result.ok) onVerified({ name: result.value.name, role: result.value.role });
     else if (showError) setError(result.message);
   }
 
@@ -38,7 +38,7 @@ export function AdminGate({ pin, onPinChange, verified, onVerified, isOnline, ch
     <form className="admin-gate" onSubmit={(event) => { event.preventDefault(); void verify(true); }}>
       <span className="empty-bag"><Lock size={24} /></span>
       <strong>Sección de administración</strong>
-      <span>Ingresa el PIN de administrador para continuar.</span>
+      <span>Ingresa tu clave para continuar.</span>
       <div className="money-input"><Lock size={15} /><input aria-label="PIN de administrador" type="password" inputMode="numeric" autoComplete="off" autoFocus value={pin} onChange={(event) => { onPinChange(event.target.value); setError(''); }} placeholder="PIN" /></div>
       {error && <p className="form-error" role="alert">{error}</p>}
       <button className="modal-primary" type="submit" disabled={checking}>{checking ? 'Verificando…' : 'Entrar'}</button>
