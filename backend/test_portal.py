@@ -155,3 +155,20 @@ def test_portal_page_is_served_with_absolute_preview_image(tmp_path):
     with TestClient(create_app(f"sqlite:///{tmp_path / 'p.db'}", frontend_dist=dist, admin_pin="1234")) as client:
         page = client.get("/pedir")
         assert page.status_code == 200 and 'content="http://testserver/logo.png"' in page.text
+
+
+def test_online_order_deducts_stock_once_when_accepted_and_restores_on_cancel(tmp_path):
+    with client_for(tmp_path) as client:
+        item = client.post("/api/stock-items", json={"kind": "INSUMO", "name": "Masa", "unit": "unid", "unitCost": 2, "initialStock": 100}, headers=PIN).json()
+        assert client.put("/api/products/1/recipe", json={"margin": 50, "lines": [{"itemId": item["id"], "quantity": 3}]}, headers=PIN).status_code == 200
+        stock = lambda: client.get("/api/stock-items", headers=PIN).json()[0]["stock"]
+        placed = client.post("/api/portal/orders", json=order(items=[{"productId": 1, "quantity": 2}])).json()
+        assert stock() == 100  # recién llegado: todavía no se descuenta
+        oid = placed["id"]
+        assert client.put(f"/api/portal/orders/{oid}", json={"status": "CONFIRMADO"}, headers=PIN).status_code == 200
+        assert stock() == 94
+        client.put(f"/api/portal/orders/{oid}", json={"status": "LISTO"}, headers=PIN)
+        client.put(f"/api/portal/orders/{oid}", json={"status": "ENTREGADO"}, headers=PIN)
+        assert stock() == 94  # no se descuenta dos veces
+        client.put(f"/api/portal/orders/{oid}", json={"status": "CANCELADO"}, headers=PIN)
+        assert stock() == 100

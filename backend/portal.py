@@ -10,6 +10,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from .inventory import deduct_stock_for_sale, now_utc, restore_stock_for_order
 from .models import Category, OnlineOrder, OnlineOrderItem, Product, ProductText, Promotion, Setting
 from .reports import LOCAL_TZ
 
@@ -446,7 +447,16 @@ def register_portal_routes(app: FastAPI, get_db: Callable[..., Any], require_adm
         order = session.get(OnlineOrder, order_id)
         if order is None:
             raise HTTPException(status_code=404, detail="Pedido no encontrado")
+        items = list(session.scalars(select(OnlineOrderItem).where(OnlineOrderItem.order_id == order.id).order_by(OnlineOrderItem.id)))
+        lines = [(item.product_id, item.quantity) for item in items]
+        label = f"Pedido online {order.code}"
+        # El stock se descuenta una sola vez, cuando el local acepta el pedido (o lo prepara, si se salteó ese paso).
+        if data.status in ("CONFIRMADO", "LISTO", "ENTREGADO") and not order.stock_deducted:
+            deduct_stock_for_sale(session, None, lines, now_utc(), label)
+            order.stock_deducted = True
+        elif data.status == "CANCELADO" and order.stock_deducted:
+            restore_stock_for_order(session, lines, now_utc(), f"{label} cancelado")
+            order.stock_deducted = False
         order.status = data.status
         session.commit()
-        items = list(session.scalars(select(OnlineOrderItem).where(OnlineOrderItem.order_id == order.id).order_by(OnlineOrderItem.id)))
         return serialize_order(order, items)

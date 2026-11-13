@@ -199,7 +199,7 @@ def consume_lots(session: Session, item_id: int, quantity: Decimal) -> None:
         remaining -= take
 
 
-def deduct_stock_for_sale(session: Session, sale_id: int, items: list[tuple[int, int]], when: datetime) -> None:
+def deduct_stock_for_sale(session: Session, sale_id: int | None, items: list[tuple[int, int]], when: datetime, note: str = "") -> None:
     """Descuenta del inventario lo que lleva cada producto vendido según su receta (el stock puede quedar negativo)."""
     for product_id, quantity in items:
         for line, item in session.execute(
@@ -209,8 +209,19 @@ def deduct_stock_for_sale(session: Session, sale_id: int, items: list[tuple[int,
             item.stock -= used
             consume_lots(session, item.id, used)
             session.add(StockMovement(
-                item_id=item.id, kind="VENTA", quantity=-used, unit_cost=item.unit_cost, sale_id=sale_id, created_at=when,
+                item_id=item.id, kind="VENTA", quantity=-used, unit_cost=item.unit_cost, sale_id=sale_id, note=note, created_at=when,
             ))
+
+
+def restore_stock_for_order(session: Session, items: list[tuple[int, int]], when: datetime, note: str) -> None:
+    """Devuelve al inventario lo descontado por un pedido que se cancela (no reconstruye los lotes)."""
+    for product_id, quantity in items:
+        for line, item in session.execute(
+            select(RecipeLine, StockItem).join(StockItem, RecipeLine.item_id == StockItem.id).where(RecipeLine.product_id == product_id)
+        ).all():
+            used = line.quantity * quantity
+            item.stock += used
+            session.add(StockMovement(item_id=item.id, kind="AJUSTE", quantity=used, unit_cost=item.unit_cost, note=note, created_at=when))
 
 
 def register_inventory_routes(app: FastAPI, get_db: Callable[..., Any], require_admin: Callable[..., None]) -> None:

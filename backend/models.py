@@ -268,6 +268,7 @@ class OnlineOrder(Base):
     promo_title: Mapped[str] = mapped_column("promocion", String(80), default="", nullable=False)
     total: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
     status: Mapped[str] = mapped_column("estado", String(12), default="NUEVO", nullable=False)
+    stock_deducted: Mapped[bool] = mapped_column("stock_descontado", Boolean, default=False, nullable=False)
     created_at: Mapped[datetime] = mapped_column("creado_en", DateTime, nullable=False)
 
 
