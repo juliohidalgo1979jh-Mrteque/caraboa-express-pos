@@ -71,13 +71,28 @@ export function buildPixPayload(config: PixConfig, amount: number, txid: string)
   return `${withCrcId}${crc16(withCrcId)}`;
 }
 
+const keyNames: Record<string, Record<'es' | 'pt' | 'en', string>> = {
+  CPF_CNPJ: { es: 'CPF/CNPJ', pt: 'CPF/CNPJ', en: 'CPF/CNPJ' },
+  CELULAR: { es: 'celular', pt: 'celular', en: 'phone' },
+  EMAIL: { es: 'correo', pt: 'e-mail', en: 'email' },
+  ALEATORIA: { es: 'clave aleatoria', pt: 'chave aleatória', en: 'random key' },
+};
+
+/** Línea legible con la clave Pix (la del correo, CPF, celular…), para pagar escribiéndola en el banco. */
+export function pixKeyLine(config: PixConfig, lang: 'es' | 'pt' | 'en' = 'pt'): string | null {
+  if (!hasPixKey(config)) return null;
+  const label = lang === 'es' ? 'Clave Pix' : lang === 'pt' ? 'Chave Pix' : 'Pix key';
+  return `${label} (${keyNames[config.keyType]?.[lang] ?? ''}): *${config.key.trim()}*`;
+}
+
 /** Mensaje para el cliente (en portugués, el idioma de la clientela). Incluye código copia y pega y/o enlace. */
 export function pixMessage(config: PixConfig, amountText: string, orderCode: string | null, payload: string | null): string {
   return [
     '*Caraboa Express*',
     `${orderCode ? `Pedido *${orderCode}* · ` : ''}Total: *${amountText}*`,
     '',
-    ...(payload ? ['Pague com *Pix copia e cola* (copie a mensagem abaixo e cole no app do seu banco):', '', payload, ''] : []),
+    ...(pixKeyLine(config) ? [pixKeyLine(config) as string, ''] : []),
+    ...(payload ? ['Ou pague com *Pix copia e cola* (copie a mensagem abaixo e cole no app do seu banco):', '', payload, ''] : []),
     ...(config.link.trim() ? [`Ou pague pelo link: ${config.link.trim()}`, ''] : []),
     'Obrigado! Assim que o pagamento cair, preparamos seu pedido.',
   ].join('\n');

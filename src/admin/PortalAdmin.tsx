@@ -4,7 +4,7 @@ import qrcode from 'qrcode-generator';
 import { adminRequest } from '../db';
 import { currency, parseMoney, paymentLabels } from '../data';
 import { readCachedPix } from '../db';
-import { buildPixPayload, hasPixKey } from '../pix';
+import { buildPixPayload, hasPixKey, pixKeyLine } from '../pix';
 import { whatsappNumber } from '../ReceiptShare';
 import { ConfirmDelete, Modal, useAdminList } from './ui';
 
@@ -110,23 +110,24 @@ function customerMessage(order: OnlineOrder, kind: Notice): string {
   const pix = readCachedPix();
   const payload = hasPixKey(pix) ? buildPixPayload(pix, order.total, order.code.replace(/\W/g, '')) : null;
   const link = pix.link.trim();
+  const keyLine = pixKeyLine(pix, order.lang);
   const fee = order.deliveryFee ?? 0;
   const t = {
     es: {
       hi: `Hola ${order.name}! Recibimos tu pedido *${order.code}*.`, items: 'Productos', fee: 'Envío', total: 'Total a pagar',
-      need: 'Para empezar a prepararlo, indícanos cómo vas a abonar.', pix: 'Puedes pagar con *Pix copia e cola* (copia el mensaje de abajo y pégalo en el app de tu banco):',
+      need: 'Para empezar a prepararlo, indícanos cómo vas a abonar.', pix: 'O paga con *Pix copia e cola* (copia el mensaje de abajo y pégalo en el app de tu banco):',
       link: 'O paga por este enlace:', proof: 'Cuando pagues, envíanos el comprobante por este chat y empezamos enseguida.',
       paid: `Pago recibido, gracias! Ya estamos preparando tu pedido *${order.code}*.`, ready: `Tu pedido *${order.code}* está listo. Ya puedes pasar a retirarlo.`, onway: `Tu pedido *${order.code}* va en camino a ${order.address}.`,
     },
     pt: {
       hi: `Olá ${order.name}! Recebemos seu pedido *${order.code}*.`, items: 'Produtos', fee: 'Entrega', total: 'Total a pagar',
-      need: 'Para começar a preparar, nos diga como vai pagar.', pix: 'Você pode pagar com *Pix copia e cola* (copie a mensagem abaixo e cole no app do seu banco):',
+      need: 'Para começar a preparar, nos diga como vai pagar.', pix: 'Ou pague com *Pix copia e cola* (copie a mensagem abaixo e cole no app do seu banco):',
       link: 'Ou pague pelo link:', proof: 'Depois de pagar, envie o comprovante aqui no chat e começamos na hora.',
       paid: `Pagamento recebido, obrigado! Já estamos preparando seu pedido *${order.code}*.`, ready: `Seu pedido *${order.code}* está pronto. Pode vir retirar.`, onway: `Seu pedido *${order.code}* saiu para entrega em ${order.address}.`,
     },
     en: {
       hi: `Hi ${order.name}! We got your order *${order.code}*.`, items: 'Items', fee: 'Delivery', total: 'Total to pay',
-      need: 'To start preparing it, please tell us how you will pay.', pix: 'You can pay with *Pix copy & paste* (copy the message below and paste it in your bank app):',
+      need: 'To start preparing it, please tell us how you will pay.', pix: 'Or pay with *Pix copy & paste* (copy the message below and paste it in your bank app):',
       link: 'Or pay with this link:', proof: 'Once you pay, send us the receipt in this chat and we will start right away.',
       paid: `Payment received, thank you! We are now preparing your order *${order.code}*.`, ready: `Your order *${order.code}* is ready. You can come pick it up.`, onway: `Your order *${order.code}* is on its way to ${order.address}.`,
     },
@@ -137,6 +138,7 @@ function customerMessage(order: OnlineOrder, kind: Notice): string {
   return [
     t.hi, `${t.items}: ${brl(order.subtotal - order.discount)}`, ...(order.fulfillment === 'ENTREGA' ? [`${t.fee}: ${brl(fee)}`] : []), `*${t.total}: ${brl(order.total)}*`, '',
     t.need,
+    ...(keyLine ? ['', keyLine] : []),
     ...(payload ? ['', t.pix, '', payload] : []),
     ...(link ? ['', `${t.link} ${link}`] : []),
     ...(payload || link ? ['', t.proof] : []),
