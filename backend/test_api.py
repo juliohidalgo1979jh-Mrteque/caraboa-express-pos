@@ -671,3 +671,26 @@ def test_pix_settings_validation_and_roles(tmp_path):
         assert c.put("/api/settings/pix", headers=owner, json={**good, "link": "ftp://x"}).status_code == 422
         assert c.put("/api/settings/pix", headers=owner, json=good).status_code == 200
         assert c.get("/api/settings/pix").json()["name"] == "Caraboa Express"
+
+
+def test_shift_breakdown_and_delivery_fee(tmp_path):
+    from fastapi.testclient import TestClient
+    app = create_app(database_url=f"sqlite:///{tmp_path}/d.db", frontend_dist=None, admin_pin="1111")
+    with TestClient(app) as c:
+        opened = c.post("/api/sync", json={"type": "shift.open", "clientId": "s1", "payload": {
+            "openingCash": 120.5, "openedAt": "2026-11-12T10:00:00Z", "openingBreakdown": {"100": 1, "20": 1, "0.5": 1, "x": 3}}})
+        assert opened.status_code == 200
+        sale = {"uuid_local": "v1", "turno_local_id": "s1", "subtotal": 25, "propina": 0, "envio": 7, "total": 32,
+                "metodo_pago": "EFECTIVO", "creado_en": "2026-11-12T10:05:00Z",
+                "detalles": [{"productId": 1, "name": "Pizza", "quantity": 1, "price": 25, "subtotal": 25}]}
+        bad = c.post("/api/sync", json={"type": "sale.create", "clientId": "v1", "payload": {**sale, "total": 25}})
+        assert bad.status_code == 409
+        assert c.post("/api/sync", json={"type": "sale.create", "clientId": "v1", "payload": sale}).status_code == 200
+        c.post("/api/sync", json={"type": "shift.close", "clientId": "s1", "payload": {
+            "closingCash": 152.5, "closedAt": "2026-11-12T18:00:00Z", "closingBreakdown": {"100": 1, "50": 1, "2": 1, "0.5": 1}}})
+        from sqlalchemy import text
+        with app.state.engine.connect() as conn:
+            row = conn.execute(text("select desglose_apertura, desglose_cierre from turnos")).one()
+            assert '"100":1' in row[0] and "x" not in row[0] and '"0.5":1' in row[0]
+            assert '"50":1' in row[1]
+            assert float(conn.execute(text("select envio from ventas")).scalar_one()) == 7.0

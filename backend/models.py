@@ -61,6 +61,9 @@ class Shift(Base):
     closed_at: Mapped[datetime | None] = mapped_column("fecha_cierre", DateTime)
     state: Mapped[str] = mapped_column("estado", String(20), default="ABIERTO", nullable=False)
     point_id: Mapped[int | None] = mapped_column("punto_id", ForeignKey("puntos_venta.id"))
+    # Conteo de billetes y monedas (JSON {"denominación": cantidad}) al abrir y al cerrar la caja.
+    opening_detail: Mapped[str | None] = mapped_column("desglose_apertura", String(600))
+    closing_detail: Mapped[str | None] = mapped_column("desglose_cierre", String(600))
 
 
 class Setting(Base):
@@ -78,6 +81,7 @@ class Sale(Base):
     shift_id: Mapped[int] = mapped_column("turno_id", ForeignKey("turnos.id"), nullable=False)
     subtotal: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
     tip: Mapped[Decimal] = mapped_column("propina", Numeric(10, 2), nullable=False, default=Decimal("0.00"))
+    delivery_fee: Mapped[Decimal] = mapped_column("envio", Numeric(10, 2), nullable=False, default=Decimal("0.00"))
     total: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
     payment_method: Mapped[str] = mapped_column("metodo_pago", String(20), nullable=False)
     point_id: Mapped[int | None] = mapped_column("punto_id", ForeignKey("puntos_venta.id"))

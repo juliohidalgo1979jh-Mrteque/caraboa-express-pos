@@ -101,10 +101,11 @@ def register_kitchen_routes(app: FastAPI, get_db: Callable[..., Any]) -> None:
         )
         order = f"<div class='order'><small>PEDIDO</small><strong>{escape(sale.order_code)}</strong></div>" if sale.order_code else ""
         tip = f"<div class='row'><span>Propina</span><span>{ars(sale.tip)}</span></div>" if sale.tip else ""
+        delivery = f"<div class='row'><span>Envío</span><span>{ars(sale.delivery_fee)}</span></div>" if sale.delivery_fee else ""
         body = (
             f"<h1>Caraboa Express</h1><p class='muted'>{to_local(sale.created_at).strftime('%d/%m/%Y %H:%M')}"
             f"{' · ' + escape(point.name) if point else ''}</p>{order}<hr>{rows}<hr>"
-            f"<div class='row'><span>Subtotal</span><span>{ars(sale.subtotal)}</span></div>{tip}"
+            f"<div class='row'><span>Subtotal</span><span>{ars(sale.subtotal)}</span></div>{tip}{delivery}"
             f"<div class='row total'><span>Total</span><span>{ars(sale.total)}</span></div>"
             f"<p class='muted'>Pago: {escape(METHOD_LABELS.get(sale.payment_method, sale.payment_method))}</p>"
             "<p class='thanks'>¡Gracias por comer rico!</p><p class='muted'>Documento no válido como factura.</p>"

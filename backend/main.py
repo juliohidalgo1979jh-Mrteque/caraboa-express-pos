@@ -1,5 +1,6 @@
 import base64
 import binascii
+import json
 import os
 import secrets
 from datetime import datetime
@@ -77,6 +78,22 @@ def as_datetime(value: Any, *, default: datetime | None = None) -> datetime:
         return parsed.replace(tzinfo=None)
     except (TypeError, ValueError) as error:
         raise HTTPException(status_code=422, detail="Formato de fecha no válido") from error
+
+
+def as_breakdown(value: Any) -> str | None:
+    """Conteo de billetes/monedas como JSON compacto {"denominación": cantidad}; ignora lo que no sea válido."""
+    if not isinstance(value, dict):
+        return None
+    clean: dict[str, int] = {}
+    for key, count in value.items():
+        try:
+            denomination = Decimal(str(key))
+            amount = int(count)
+        except (InvalidOperation, TypeError, ValueError):
+            continue
+        if denomination > 0 and 0 < amount <= 100000:
+            clean[format(denomination.normalize(), "f")] = amount
+    return json.dumps(clean, separators=(",", ":"))[:600] if clean else None
 
 
 def as_money(value: Any, field: str) -> Decimal:
@@ -227,7 +244,11 @@ ADDED_COLUMNS = {
         "eliminado": "BOOLEAN NOT NULL DEFAULT FALSE",
         "margen": "NUMERIC(6, 2)",
     },
-    "turnos": {"punto_id": "INTEGER REFERENCES puntos_venta(id)"},
+    "turnos": {
+        "punto_id": "INTEGER REFERENCES puntos_venta(id)",
+        "desglose_apertura": "VARCHAR(600)",
+        "desglose_cierre": "VARCHAR(600)",
+    },
     "proveedores": {"eliminado": "BOOLEAN NOT NULL DEFAULT FALSE"},
     "articulos_stock": {"eliminado": "BOOLEAN NOT NULL DEFAULT FALSE"},
     "ventas": {
@@ -235,6 +256,7 @@ ADDED_COLUMNS = {
         "numero_pedido": "INTEGER",
         "codigo_pedido": "VARCHAR(12)",
         "comanda_impresa_en": "TIMESTAMP",
+        "envio": "NUMERIC(10, 2) NOT NULL DEFAULT 0",
     },
     "puntos_venta": {"codigo": "VARCHAR(3)"},
 }
@@ -517,6 +539,8 @@ def create_app(
                 "opening_cash": opening_cash,
                 "fecha_apertura": opened_at,
                 "opened_at": opened_at,
+                "desglose_apertura": as_breakdown(payload.get("openingBreakdown")),
+                "opening_detail": as_breakdown(payload.get("openingBreakdown")),
                 "estado": "ABIERTO",
                 "state": "ABIERTO",
             }
@@ -542,6 +566,8 @@ def create_app(
                 "closing_cash": closing_cash,
                 "fecha_cierre": closed_at,
                 "closed_at": closed_at,
+                "desglose_cierre": as_breakdown(payload.get("closingBreakdown")),
+                "closing_detail": as_breakdown(payload.get("closingBreakdown")),
                 "estado": "CERRADO",
                 "state": "CERRADO",
             }
@@ -606,11 +632,12 @@ def create_app(
             if method not in PAYMENT_METHODS:
                 raise HTTPException(status_code=422, detail="Método de pago no válido")
             tip = as_money(payload.get("propina", 0), "Propina")
-            total = subtotal + tip
+            delivery_fee = as_money(payload.get("envio", 0), "Envío")
+            total = subtotal + tip + delivery_fee
             if as_money(payload.get("subtotal"), "Subtotal") != subtotal:
                 raise HTTPException(status_code=409, detail="El subtotal de la venta no coincide con sus artículos")
             if as_money(payload.get("total"), "Total") != total:
-                raise HTTPException(status_code=409, detail="El total de la venta no coincide con su subtotal y propina")
+                raise HTTPException(status_code=409, detail="El total de la venta no coincide con su subtotal, propina y envío")
             created_at = as_datetime(payload.get("creado_en"))
             # Número de pedido que mostró el dispositivo (A-001…); ventas de versiones anteriores no lo traen.
             order_number = payload.get("numero_pedido") if isinstance(payload.get("numero_pedido"), int) and payload["numero_pedido"] > 0 else None
@@ -624,6 +651,8 @@ def create_app(
                 "descuento": Decimal("0.00"),
                 "tip": tip,
                 "propina": tip,
+                "delivery_fee": delivery_fee,
+                "envio": delivery_fee,
                 "total": total,
                 "metodo_pago": method,
                 "payment_method": method,

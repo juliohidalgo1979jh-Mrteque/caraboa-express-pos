@@ -24,6 +24,7 @@ export function ticketText(sale: LocalSale): string {
     '',
     ...sale.items.map((item) => `${item.quantity} × ${item.name}: ${currency.format(item.subtotal)}`),
     ...(sale.tip ? [`Propina: ${currency.format(sale.tip)}`] : []),
+    ...(sale.deliveryFee ? [`Envío: ${currency.format(sale.deliveryFee)}`] : []),
     `*Total: ${currency.format(sale.total)}* (${paymentLabels[sale.paymentMethod] ?? sale.paymentMethod})`,
     '',
     `Tu ticket: ${ticketUrl(sale)}`,

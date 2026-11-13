@@ -80,6 +80,7 @@ def build_report(session: Session, sales: list[Sale], shifts: list[Shift]) -> di
 
     total = sum((sale.total for sale in sales), ZERO)
     tips = sum((sale.tip for sale in sales), ZERO)
+    delivery = sum((sale.delivery_fee for sale in sales), ZERO)
     shift_rows = []
     for shift in sorted(shifts, key=lambda item: item.opened_at):
         expected = shift.opening_cash + cash_by_shift[shift.id]
@@ -104,9 +105,10 @@ def build_report(session: Session, sales: list[Sale], shifts: list[Shift]) -> di
         "salesCount": len(sales),
         "total": float(total),
         "tips": float(tips),
+        "deliveryFees": float(delivery),
         "averageTicket": float(total / len(sales)) if sales else 0.0,
         "cost": float(cost),
-        "grossProfit": float(total - tips - cost) if cost else None,
+        "grossProfit": float(total - tips - delivery - cost) if cost else None,
         "byPoint": rows(by_point),
         "byMethod": rows(by_method),
         "products": sorted(({"name": name, "quantity": value["quantity"], "total": float(value["total"])} for name, value in products.items()),
@@ -160,10 +162,11 @@ def render_pdf(title: str, subtitle: str, report: dict[str, Any]) -> bytes:
         ["Ventas", str(report["salesCount"])],
         ["Total vendido", ars(report["total"])],
         ["Propinas (incluidas en el total)", ars(report["tips"])],
+        ["Envíos cobrados (incluidos en el total)", ars(report["deliveryFees"])],
         ["Ticket promedio", ars(report["averageTicket"])],
     ]
     if report["grossProfit"] is not None:
-        summary += [["Costo de mercadería (según recetas)", ars(report["cost"])], ["Ganancia bruta (sin propinas)", ars(report["grossProfit"])]]
+        summary += [["Costo de mercadería (según recetas)", ars(report["cost"])], ["Ganancia bruta (sin propinas ni envíos)", ars(report["grossProfit"])]]
     story += [Paragraph("Resumen", h2), table(None, summary, [120, 58])]
 
     story += [Paragraph("Por punto de venta", h2), table(["PUNTO", "VENTAS", "TOTAL"], [[r["name"], str(r["count"]), ars(r["total"])] for r in report["byPoint"]], [100, 30, 48])]

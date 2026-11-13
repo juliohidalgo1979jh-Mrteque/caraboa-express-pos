@@ -42,6 +42,7 @@ import { InventoryAdmin } from './admin/InventoryAdmin';
 import { PointsAdmin } from './admin/PointsAdmin';
 import { PixSettings } from './admin/PixSettings';
 import { PixCharge } from './PixCharge';
+import { Denominations, breakdownTotal, cleanBreakdown, type Breakdown } from './Denominations';
 import type { PixConfig } from './pix';
 import { RecipesAdmin } from './admin/RecipesAdmin';
 import { ReportsAdmin } from './admin/ReportsAdmin';
@@ -135,8 +136,10 @@ function App() {
   const [cashReceived, setCashReceived] = useState('');
   const [tipRate, setTipRate] = useState<number | 'custom' | null>(null);
   const [customTip, setCustomTip] = useState('');
-  const [openingCash, setOpeningCash] = useState('');
-  const [closingCash, setClosingCash] = useState('');
+  const [openingCounts, setOpeningCounts] = useState<Breakdown>({});
+  const [closingCounts, setClosingCounts] = useState<Breakdown>({});
+  const [deliveryOn, setDeliveryOn] = useState(false);
+  const [deliveryText, setDeliveryText] = useState('');
   const [lastSale, setLastSale] = useState<LocalSale | null>(null);
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [pendingCount, setPendingCount] = useState(0);
@@ -177,7 +180,8 @@ function App() {
     .reduce((total, sale) => total + sale.total, 0);
   const expectedCash = (activeShift?.openingCash ?? 0) + cashSales;
   const tipAmount = tipRate === null ? 0 : tipRate === 'custom' ? (parseMoney(customTip) || 0) : Math.round(cartTotal * tipRate) / 100;
-  const amountDue = Math.round((cartTotal + tipAmount) * 100) / 100;
+  const deliveryFee = deliveryOn ? Math.max(0, parseMoney(deliveryText) || 0) : 0;
+  const amountDue = Math.round((cartTotal + tipAmount + deliveryFee) * 100) / 100;
   const filteredProducts = activeProducts.filter((product) => {
     const matchesCategory = category === 'Todos' || product.category === category;
     const matchesSearch = product.name.toLowerCase().includes(search.toLowerCase());
@@ -288,11 +292,11 @@ function App() {
   }
 
   async function openShift() {
-    const amount = parseMoney(openingCash);
-    if (!Number.isFinite(amount) || amount < 0) return;
+    const amount = breakdownTotal(openingCounts);
     const shift: LocalShift = {
       id: makeId(),
       openingCash: amount,
+      openingBreakdown: cleanBreakdown(openingCounts),
       openedAt: new Date().toISOString(),
       pointId: devicePoint?.id ?? null,
       pointName: devicePoint?.name,
@@ -304,7 +308,7 @@ function App() {
     });
     setActiveShift(shift);
     setActiveDialog(null);
-    setOpeningCash('');
+    setOpeningCounts({});
     setToast('Turno abierto');
     const result = await syncQueue();
     setPendingCount(result.pending);
@@ -313,16 +317,15 @@ function App() {
 
   async function closeShift() {
     if (!activeShift) return;
-    const amount = parseMoney(closingCash);
-    if (!Number.isFinite(amount) || amount < 0) return;
-    const closed: LocalShift = { ...activeShift, closedAt: new Date().toISOString(), closingCash: amount };
+    const amount = breakdownTotal(closingCounts);
+    const closed: LocalShift = { ...activeShift, closedAt: new Date().toISOString(), closingCash: amount, closingBreakdown: cleanBreakdown(closingCounts) };
     await db.transaction('rw', db.shifts, db.queue, async () => {
       await db.shifts.put(closed);
       await db.queue.add({ type: 'shift.close', clientId: closed.id, payload: { ...closed } });
     });
     setActiveShift(null);
     setActiveDialog(null);
-    setClosingCash('');
+    setClosingCounts({});
     setToast(`Turno cerrado · diferencia ${currency.format(amount - expectedCash)}`);
     const result = await syncQueue();
     setPendingCount(result.pending);
@@ -351,6 +354,7 @@ function App() {
       })),
       subtotal: cartTotal,
       tip: tipAmount,
+      deliveryFee,
       total: amountDue,
       paymentMethod,
       amountReceived: received,
@@ -372,6 +376,7 @@ function App() {
           turno_local_id: sale.shiftId,
           subtotal: sale.subtotal,
           propina: sale.tip,
+          envio: sale.deliveryFee ?? 0,
           total: sale.total,
           metodo_pago: sale.paymentMethod,
           creado_en: sale.createdAt,
@@ -385,6 +390,8 @@ function App() {
     setLastSale(sale);
     setCart([]);
     setCashReceived('');
+    setDeliveryOn(false);
+    setDeliveryText('');
     setActiveDialog('receipt');
     const result = await syncQueue();
     setPendingCount(result.pending);
@@ -615,7 +622,7 @@ function App() {
                 </div>)}
               </div> : <div className="cart-empty"><span className="empty-bag"><ShoppingBag size={25} /></span><strong>Tu pedido empieza aquí</strong><span>Elige algo rico de la carta.</span></div>}
 
-              <div className="order-bottom"><div className="order-summary"><div><span>Subtotal</span><strong>{currency.format(cartTotal)}</strong></div><div><span>Descuento</span><button className="discount-button" onClick={() => setToast('Los descuentos se habilitarán en una próxima fase.')} disabled={!cart.length}>Añadir</button></div><div className="total-row"><span>Total</span><strong>{currency.format(cartTotal)}</strong></div></div><button className="checkout-button" onClick={() => { setPaymentMethod(allowedMethods[0]); setCashReceived(''); setTipRate(null); setCustomTip(''); setActiveDialog('checkout'); }} disabled={!cart.length || !activeShift}><span><CreditCard size={18} />Cobrar pedido</span><span>{currency.format(cartTotal)}<ArrowRight size={16} /></span></button><div className="order-hint"><span>Enter</span> para cobrar <i /> <span>+ −</span> para cantidad</div></div>
+              <div className="order-bottom"><div className="order-summary"><div><span>Subtotal</span><strong>{currency.format(cartTotal)}</strong></div><div><span>Descuento</span><button className="discount-button" onClick={() => setToast('Los descuentos se habilitarán en una próxima fase.')} disabled={!cart.length}>Añadir</button></div><div className="total-row"><span>Total</span><strong>{currency.format(cartTotal)}</strong></div></div><button className="checkout-button" onClick={() => { setPaymentMethod(allowedMethods[0]); setCashReceived(''); setTipRate(null); setCustomTip(''); setDeliveryOn(false); setDeliveryText(''); setActiveDialog('checkout'); }} disabled={!cart.length || !activeShift}><span><CreditCard size={18} />Cobrar pedido</span><span>{currency.format(cartTotal)}<ArrowRight size={16} /></span></button><div className="order-hint"><span>Enter</span> para cobrar <i /> <span>+ −</span> para cantidad</div></div>
             </aside>
           </div>
         ) : activeScreen === 'history' ? (
@@ -648,7 +655,7 @@ function App() {
       {!activeShift && !activeDialog && <button className="floating-open" onClick={() => setActiveDialog(devicePoint ? 'open' : 'point')}><Wallet size={17} /> Abrir caja</button>}
 
       {activeDialog && <div className={`modal-backdrop ${activeDialog === 'receipt' ? 'receipt-backdrop' : ''}`} onMouseDown={(event) => { if (event.target === event.currentTarget && activeDialog !== 'open') setActiveDialog(null); }}>
-        {activeDialog === 'open' && <section className="modal shift-modal" role="dialog" aria-modal="true" aria-labelledby="open-title"><div className="modal-topline"><span className="modal-symbol green"><Wallet size={20} /></span><button className="icon-button" onClick={() => { if (activeShift) setActiveDialog(null); }} aria-label="Cerrar"><X size={18} /></button></div><p className="eyebrow">INICIO DE JORNADA</p><h2 id="open-title">Abrir caja</h2><p className="modal-copy">Registra el efectivo inicial para comenzar a vender. Este monto será la base del arqueo.</p><label className="field-label" htmlFor="opening-cash">Efectivo inicial <span>BRL</span></label><div className="money-input"><span>R$</span><input id="opening-cash" autoFocus type="text" inputMode="decimal" autoComplete="off" value={openingCash} onChange={(event) => setOpeningCash(event.target.value)} placeholder="0,00" onKeyDown={(event) => { if (event.key === 'Enter') void openShift(); }} /></div><button className="modal-primary" onClick={() => void openShift()} disabled={!(parseMoney(openingCash) >= 0)}>Abrir turno <ArrowRight size={17} /></button><div className="modal-footnote"><Cloud size={14} /> Quedará guardado en este dispositivo si no hay conexión.</div></section>}
+        {activeDialog === 'open' && <section className="modal shift-modal" role="dialog" aria-modal="true" aria-labelledby="open-title"><div className="modal-topline"><span className="modal-symbol green"><Wallet size={20} /></span><button className="icon-button" onClick={() => { if (activeShift) setActiveDialog(null); }} aria-label="Cerrar"><X size={18} /></button></div><p className="eyebrow">INICIO DE JORNADA</p><h2 id="open-title">Abrir caja</h2><p className="modal-copy">Cuenta el efectivo inicial por billetes y monedas. Ese total será la base del arqueo.</p><p className="field-label">Cuenta los billetes y monedas <span>BRL</span></p><Denominations value={openingCounts} onChange={setOpeningCounts} /><button className="modal-primary" onClick={() => void openShift()}>Abrir turno con {currency.format(breakdownTotal(openingCounts))} <ArrowRight size={17} /></button><div className="modal-footnote"><Cloud size={14} /> Quedará guardado en este dispositivo si no hay conexión.</div></section>}
 
         {activeDialog === 'point' && <section className="modal shift-modal" role="dialog" aria-modal="true" aria-labelledby="point-choose-title">
           <div className="modal-topline"><span className="modal-symbol orange"><MonitorSmartphone size={20} /></span>{devicePoint && <button className="icon-button" onClick={() => setActiveDialog(activeShift ? null : 'open')} aria-label="Cerrar"><X size={18} /></button>}</div>
@@ -660,7 +667,7 @@ function App() {
           {!devicePoint && <button className="secondary-button point-skip" onClick={() => setActiveDialog('open')}>Continuar sin punto por ahora</button>}
         </section>}
 
-        {activeDialog === 'checkout' && <section className="modal checkout-modal" role="dialog" aria-modal="true" aria-labelledby="checkout-title"><div className="modal-topline"><span className="modal-symbol orange"><CreditCard size={20} /></span><button className="icon-button" onClick={() => setActiveDialog(null)} aria-label="Cerrar"><X size={18} /></button></div><p className="eyebrow">PEDIDO {nextOrderCode}</p><h2 id="checkout-title">Forma de pago</h2><p className="modal-copy">Selecciona cómo recibes el pago.</p><div className="payment-options" role="group" aria-label="Método de pago">{allowedMethods.map((method) => { const Icon = paymentIcons[method]; return <button key={method} className={paymentMethod === method ? 'selected' : ''} onClick={() => setPaymentMethod(method)}><span><Icon size={19} /></span><strong>{paymentLabels[method]}</strong>{paymentMethod === method && <Check size={16} />}</button>; })}</div><div className="tip-picker"><span className="tip-label">Propina <small>opcional</small></span><div className="tip-options"><button className={tipRate === null ? 'selected' : ''} onClick={() => { setTipRate(null); setCustomTip(''); }}>Sin propina</button><button className={tipRate === 10 ? 'selected' : ''} onClick={() => setTipRate(10)}>10%</button><button className={tipRate === 15 ? 'selected' : ''} onClick={() => setTipRate(15)}>15%</button><button className={tipRate === 'custom' ? 'selected' : ''} onClick={() => setTipRate('custom')}>Libre</button></div>{tipRate === 'custom' && <div className="money-input custom-tip-input"><span>R$</span><input aria-label="Propina libre" type="text" inputMode="decimal" autoComplete="off" value={customTip} onChange={(event) => setCustomTip(event.target.value)} placeholder="0,00" /></div>}</div>{paymentMethod === 'QR' && <PixCharge config={pixConfig} amount={amountDue} orderCode={nextOrderCode} onToast={setToast} />}{paymentMethod === 'EFECTIVO' && <><label className="field-label" htmlFor="cash-received">Efectivo recibido <span>BRL</span></label><div className="money-input"><span>R$</span><input id="cash-received" autoFocus type="text" inputMode="decimal" autoComplete="off" value={cashReceived} onChange={(event) => setCashReceived(event.target.value)} placeholder={moneyInputValue(amountDue)} /></div><div className="change-row"><span>Cambio</span><strong>{currency.format(changeDue)}</strong></div></>}<div className="checkout-breakdown"><div><span>Consumo</span><strong>{currency.format(cartTotal)}</strong></div><div><span>Propina</span><strong>{currency.format(tipAmount)}</strong></div></div><div className="checkout-total"><span>Total a cobrar</span><strong>{currency.format(amountDue)}</strong></div><button className="modal-primary" onClick={() => void completeSale()} disabled={paymentMethod === 'EFECTIVO' && (parseMoney(cashReceived) || 0) < amountDue}>Confirmar cobro <CheckCircle2 size={18} /></button><div className="modal-footnote"><Cloud size={14} /> Pago registrado localmente. La integración con terminales se configura aparte.</div></section>}
+        {activeDialog === 'checkout' && <section className="modal checkout-modal" role="dialog" aria-modal="true" aria-labelledby="checkout-title"><div className="modal-topline"><span className="modal-symbol orange"><CreditCard size={20} /></span><button className="icon-button" onClick={() => setActiveDialog(null)} aria-label="Cerrar"><X size={18} /></button></div><p className="eyebrow">PEDIDO {nextOrderCode}</p><h2 id="checkout-title">Forma de pago</h2><p className="modal-copy">Selecciona cómo recibes el pago.</p><div className="payment-options" role="group" aria-label="Método de pago">{allowedMethods.map((method) => { const Icon = paymentIcons[method]; return <button key={method} className={paymentMethod === method ? 'selected' : ''} onClick={() => setPaymentMethod(method)}><span><Icon size={19} /></span><strong>{paymentLabels[method]}</strong>{paymentMethod === method && <Check size={16} />}</button>; })}</div><div className="tip-picker"><span className="tip-label">Propina <small>opcional</small></span><div className="tip-options"><button className={tipRate === null ? 'selected' : ''} onClick={() => { setTipRate(null); setCustomTip(''); }}>Sin propina</button><button className={tipRate === 10 ? 'selected' : ''} onClick={() => setTipRate(10)}>10%</button><button className={tipRate === 15 ? 'selected' : ''} onClick={() => setTipRate(15)}>15%</button><button className={tipRate === 'custom' ? 'selected' : ''} onClick={() => setTipRate('custom')}>Libre</button></div>{tipRate === 'custom' && <div className="money-input custom-tip-input"><span>R$</span><input aria-label="Propina libre" type="text" inputMode="decimal" autoComplete="off" value={customTip} onChange={(event) => setCustomTip(event.target.value)} placeholder="0,00" /></div>}</div>{paymentMethod === 'QR' && <PixCharge config={pixConfig} amount={amountDue} orderCode={nextOrderCode} onToast={setToast} />}{paymentMethod === 'EFECTIVO' && <><label className="field-label" htmlFor="cash-received">Efectivo recibido <span>BRL</span></label><div className="money-input"><span>R$</span><input id="cash-received" autoFocus type="text" inputMode="decimal" autoComplete="off" value={cashReceived} onChange={(event) => setCashReceived(event.target.value)} placeholder={moneyInputValue(amountDue)} /></div><div className="change-row"><span>Cambio</span><strong>{currency.format(changeDue)}</strong></div></>}<div className="delivery-picker"><label className="delivery-toggle"><input type="checkbox" checked={deliveryOn} onChange={(event) => setDeliveryOn(event.target.checked)} /> Cobrar envío (delivery)</label>{deliveryOn && <div className="money-input"><span>R$</span><input aria-label="Monto del envío" type="text" inputMode="decimal" autoComplete="off" value={deliveryText} onChange={(event) => setDeliveryText(event.target.value)} placeholder="0,00" /></div>}</div><div className="checkout-breakdown"><div><span>Consumo</span><strong>{currency.format(cartTotal)}</strong></div><div><span>Propina</span><strong>{currency.format(tipAmount)}</strong></div>{deliveryFee > 0 && <div><span>Envío</span><strong>{currency.format(deliveryFee)}</strong></div>}</div><div className="checkout-total"><span>Total a cobrar</span><strong>{currency.format(amountDue)}</strong></div><button className="modal-primary" onClick={() => void completeSale()} disabled={paymentMethod === 'EFECTIVO' && (parseMoney(cashReceived) || 0) < amountDue}>Confirmar cobro <CheckCircle2 size={18} /></button><div className="modal-footnote"><Cloud size={14} /> Pago registrado localmente. La integración con terminales se configura aparte.</div></section>}
 
         {activeDialog === 'product' && draft && <section className="modal product-modal" role="dialog" aria-modal="true" aria-labelledby="product-title">
           <div className="modal-topline"><span className={`cart-thumb ${draft.tone}`}>{draft.image ? <img src={draft.image} alt="" /> : draft.symbol || symbols[0]}</span><button className="icon-button" onClick={() => setActiveDialog(null)} aria-label="Cerrar"><X size={18} /></button></div>
@@ -718,17 +725,18 @@ function App() {
           <div className="modal-topline"><span className="modal-symbol red"><Wallet size={20} /></span><button className="icon-button" onClick={() => setActiveDialog(null)} aria-label="Cerrar"><X size={18} /></button></div>
           <p className="eyebrow">CIERRE DE JORNADA</p>
           <h2 id="close-title">Arqueo de caja</h2>
-          <p className="modal-copy">Cuenta el efectivo físico e ingresa el monto. La diferencia se mostrará después del conteo.</p>
-          <label className="field-label" htmlFor="closing-cash">Efectivo contado <span>BRL</span></label>
-          <div className="money-input"><span>R$</span><input id="closing-cash" autoFocus type="text" inputMode="decimal" autoComplete="off" value={closingCash} onChange={(event) => setClosingCash(event.target.value)} placeholder="0,00" /></div>
-          {closingCash !== '' && <div className={`change-row ${parseMoney(closingCash) - expectedCash === 0 ? 'balanced' : ''}`}><span>Diferencia</span><strong>{currency.format(parseMoney(closingCash) - expectedCash)}</strong></div>}
-          <button className="modal-primary" onClick={() => void closeShift()} disabled={!(parseMoney(closingCash) >= 0)}>Cerrar turno <CheckCircle2 size={18} /></button>
+          <p className="modal-copy">Cuenta el efectivo físico por billetes y monedas. La diferencia se calcula contra lo esperado.</p>
+          <p className="field-label">Efectivo contado <span>BRL</span></p>
+          <Denominations value={closingCounts} onChange={setClosingCounts} />
+          <div className="change-row"><span>Efectivo esperado</span><strong>{currency.format(expectedCash)}</strong></div>
+          <div className={`change-row ${breakdownTotal(closingCounts) - expectedCash === 0 ? 'balanced' : ''}`}><span>Diferencia</span><strong>{currency.format(breakdownTotal(closingCounts) - expectedCash)}</strong></div>
+          <button className="modal-primary" onClick={() => void closeShift()}>Cerrar turno <CheckCircle2 size={18} /></button>
         </section>}
 
-        {activeDialog === 'receipt' && lastSale && <section className="receipt-modal" role="dialog" aria-modal="true" aria-labelledby="receipt-title"><div className="receipt-actions"><span className="saved-badge"><CheckCircle2 size={15} /> Venta guardada</span><button className="icon-button" onClick={() => setActiveDialog(null)} aria-label="Cerrar ticket"><X size={18} /></button></div><div className="receipt-paper"><div className="receipt-brand"><span className="receipt-brand-mark has-logo"><img src="/logo.png" alt="" /></span><strong>caraboa express</strong><small>FOOD TRUCK · PUNTO DE VENTA</small></div>{lastSale.orderCode && <div className="receipt-order"><small>PEDIDO</small><strong>{lastSale.orderCode}</strong></div>}<div className="receipt-divider" /><div className="receipt-meta"><span>{lastSale.orderCode ? <>Pedido <strong>{lastSale.orderCode}</strong></> : <>Ticket <strong>#{lastSale.id.slice(0, 6).toUpperCase()}</strong></>}</span><span>{new Intl.DateTimeFormat('es', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(lastSale.createdAt))}</span></div><div className="receipt-items">{lastSale.items.map((item, index) => <div key={`${item.productId}-${index}`}><span>{item.quantity} × {item.name}</span><strong>{currency.format(item.subtotal)}</strong></div>)}</div><div className="receipt-divider" /><div className="receipt-subtotals"><div><span>Subtotal</span><strong>{currency.format(lastSale.subtotal)}</strong></div><div><span>Propina</span><strong>{currency.format(lastSale.tip)}</strong></div></div><div className="receipt-total"><span>TOTAL</span><strong>{currency.format(lastSale.total)}</strong></div><div className="receipt-payment"><span>Pago · {paymentLabels[lastSale.paymentMethod] ?? lastSale.paymentMethod}</span>{lastSale.pointName && <span>Punto · {lastSale.pointName}</span>}{lastSale.paymentMethod === 'EFECTIVO' && <><span>Recibido · {currency.format(lastSale.amountReceived)}</span><span>Cambio · {currency.format(lastSale.changeGiven)}</span></>}</div><div className="receipt-thanks">¡Gracias por comer rico!<small>Hecho con cariño en Caraboa Express</small></div></div><ReceiptShare sale={lastSale} /><div className="receipt-buttons"><button className="secondary-button" onClick={() => void printHtml(receiptHtml(lastSale))}><Printer size={16} /> Imprimir ticket</button><button className="modal-primary" onClick={() => { setActiveDialog(null); setActiveScreen('pos'); }}><Coffee size={17} /> Nuevo pedido</button></div></section>}
+        {activeDialog === 'receipt' && lastSale && <section className="receipt-modal" role="dialog" aria-modal="true" aria-labelledby="receipt-title"><div className="receipt-actions"><span className="saved-badge"><CheckCircle2 size={15} /> Venta guardada</span><button className="icon-button" onClick={() => setActiveDialog(null)} aria-label="Cerrar ticket"><X size={18} /></button></div><div className="receipt-paper"><div className="receipt-brand"><span className="receipt-brand-mark has-logo"><img src="/logo.png" alt="" /></span><strong>caraboa express</strong><small>FOOD TRUCK · PUNTO DE VENTA</small></div>{lastSale.orderCode && <div className="receipt-order"><small>PEDIDO</small><strong>{lastSale.orderCode}</strong></div>}<div className="receipt-divider" /><div className="receipt-meta"><span>{lastSale.orderCode ? <>Pedido <strong>{lastSale.orderCode}</strong></> : <>Ticket <strong>#{lastSale.id.slice(0, 6).toUpperCase()}</strong></>}</span><span>{new Intl.DateTimeFormat('es', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(lastSale.createdAt))}</span></div><div className="receipt-items">{lastSale.items.map((item, index) => <div key={`${item.productId}-${index}`}><span>{item.quantity} × {item.name}</span><strong>{currency.format(item.subtotal)}</strong></div>)}</div><div className="receipt-divider" /><div className="receipt-subtotals"><div><span>Subtotal</span><strong>{currency.format(lastSale.subtotal)}</strong></div><div><span>Propina</span><strong>{currency.format(lastSale.tip)}</strong></div>{!!lastSale.deliveryFee && <div><span>Envío</span><strong>{currency.format(lastSale.deliveryFee)}</strong></div>}</div><div className="receipt-total"><span>TOTAL</span><strong>{currency.format(lastSale.total)}</strong></div><div className="receipt-payment"><span>Pago · {paymentLabels[lastSale.paymentMethod] ?? lastSale.paymentMethod}</span>{lastSale.pointName && <span>Punto · {lastSale.pointName}</span>}{lastSale.paymentMethod === 'EFECTIVO' && <><span>Recibido · {currency.format(lastSale.amountReceived)}</span><span>Cambio · {currency.format(lastSale.changeGiven)}</span></>}</div><div className="receipt-thanks">¡Gracias por comer rico!<small>Hecho con cariño en Caraboa Express</small></div></div><ReceiptShare sale={lastSale} /><div className="receipt-buttons"><button className="secondary-button" onClick={() => void printHtml(receiptHtml(lastSale))}><Printer size={16} /> Imprimir ticket</button><button className="modal-primary" onClick={() => { setActiveDialog(null); setActiveScreen('pos'); }}><Coffee size={17} /> Nuevo pedido</button></div></section>}
       </div>}
 
-      {activeShift && <button className="close-shift-button" onClick={() => { setClosingCash(''); setActiveDialog('close'); }}><Wallet size={16} /> Cerrar turno</button>}
+      {activeShift && <button className="close-shift-button" onClick={() => { setClosingCounts({}); setActiveDialog('close'); }}><Wallet size={16} /> Cerrar turno</button>}
       {toast && <div className="toast" role="status"><CheckCircle2 size={17} />{toast}</div>}
     </div>
   );

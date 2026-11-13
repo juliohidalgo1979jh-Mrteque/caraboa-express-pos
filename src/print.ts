@@ -55,6 +55,7 @@ export function receiptHtml(sale: LocalSale): string {
       <hr>
       <div class="row"><span>Subtotal</span><span>${currency.format(sale.subtotal)}</span></div>
       ${sale.tip ? `<div class="row"><span>Propina</span><span>${currency.format(sale.tip)}</span></div>` : ''}
+      ${sale.deliveryFee ? `<div class="row"><span>Envío</span><span>${currency.format(sale.deliveryFee)}</span></div>` : ''}
       <div class="row total"><span>TOTAL</span><span>${currency.format(sale.total)}</span></div>
       <div class="row"><span>Pago</span><span>${escapeHtml(paymentLabels[sale.paymentMethod] ?? sale.paymentMethod)}</span></div>
       ${sale.paymentMethod === 'EFECTIVO' ? `<div class="row"><span>Recibido</span><span>${currency.format(sale.amountReceived)}</span></div><div class="row"><span>Cambio</span><span>${currency.format(sale.changeGiven)}</span></div>` : ''}

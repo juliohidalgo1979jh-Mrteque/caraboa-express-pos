@@ -37,6 +37,8 @@ export interface LocalShift {
   openedAt: string;
   closedAt?: string;
   closingCash?: number;
+  openingBreakdown?: Record<string, number>;
+  closingBreakdown?: Record<string, number>;
   pointId?: number | null;
   pointName?: string;
   synced: boolean;
@@ -49,6 +51,7 @@ export interface LocalSale {
   items: Array<{ productId: number; name: string; quantity: number; price: number; subtotal: number }>;
   subtotal: number;
   tip: number;
+  deliveryFee?: number;
   total: number;
   paymentMethod: PaymentMethod;
   amountReceived: number;
@@ -143,6 +146,7 @@ export interface DailyReport {
   salesCount: number;
   total: number;
   tips: number;
+  deliveryFees?: number;
   averageTicket: number;
   cost: number;
   grossProfit: number | null;
