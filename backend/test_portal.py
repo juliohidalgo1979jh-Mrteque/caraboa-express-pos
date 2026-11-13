@@ -205,3 +205,24 @@ def test_online_delivery_fee_and_sale_on_delivery(tmp_path):
         assert client.put(f"/api/portal/orders/{oid}", json={"status": "CANCELADO"}, headers=PIN).status_code == 409
         report = client.get("/api/reports/daily", headers=PIN).json()
         assert report["deliveryFees"] == 7.5 and report["salesCount"] == 1
+
+
+def test_fixed_delivery_fee_is_applied_and_adjustable(tmp_path):
+    with client_for(tmp_path) as client:
+        assert client.get("/api/portal").json()["deliveryFee"] is None
+        base = {"name": "Portal", "whatsapp": "5548988102993", "enabled": True}
+        assert client.put("/api/portal/settings", json={**base, "deliveryFee": 8}, headers=PIN).json()["deliveryFee"] == 8
+        assert client.get("/api/portal").json()["deliveryFee"] == 8
+        items = [{"productId": 1, "quantity": 1}]
+        pick = client.post("/api/portal/quote", json={"phone": "", "fulfillment": "RETIRO", "items": items}).json()
+        send = client.post("/api/portal/quote", json={"phone": "", "fulfillment": "ENTREGA", "items": items}).json()
+        assert pick["deliveryFee"] is None and send["deliveryFee"] == 8 and send["total"] == round(pick["total"] + 8, 2)
+        placed = client.post("/api/portal/orders", json=order(fulfillment="ENTREGA", address="Rua das Flores 10", items=items)).json()
+        assert placed["deliveryFee"] == 8 and placed["total"] == send["total"]
+        # el local puede ajustarlo antes del pago
+        adjusted = client.put(f"/api/portal/orders/{placed['id']}", json={"deliveryFee": 12}, headers=PIN).json()
+        assert adjusted["deliveryFee"] == 12 and adjusted["total"] == round(pick["total"] + 12, 2)
+        # sin monto fijo vuelve a "a confirmar"
+        client.put("/api/portal/settings", json={**base, "deliveryFee": None}, headers=PIN)
+        again = client.post("/api/portal/orders", json=order(fulfillment="ENTREGA", address="Rua das Flores 10", items=items)).json()
+        assert again["deliveryFee"] is None

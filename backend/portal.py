@@ -36,6 +36,7 @@ class CartLine(BaseModel):
 class QuoteInput(BaseModel):
     phone: str = Field(default="", max_length=30)
     code: str = Field(default="", max_length=30)
+    fulfillment: Literal["ENTREGA", "RETIRO"] = "RETIRO"
     items: list[CartLine] = Field(max_length=MAX_ITEMS)
 
 
@@ -57,6 +58,7 @@ class PortalSettingsInput(BaseModel):
     infoEs: str = Field(default="", max_length=200)
     infoPt: str = Field(default="", max_length=200)
     infoEn: str = Field(default="", max_length=200)
+    deliveryFee: float | None = Field(default=None, ge=0, le=1000)
 
 
 class PromotionInput(BaseModel):
@@ -115,8 +117,19 @@ def get_setting(session: Session, key: str, default: str = "") -> str:
     return setting.value if setting is not None else default
 
 
+def fixed_delivery_fee(session: Session) -> Decimal | None:
+    """Costo de envío fijo configurado por el dueño; None = se confirma pedido por pedido."""
+    raw = get_setting(session, "delivery_fee", "").strip()
+    try:
+        return Decimal(raw).quantize(CENT) if raw else None
+    except ArithmeticError:
+        return None
+
+
 def read_settings(session: Session) -> dict[str, Any]:
+    fee = fixed_delivery_fee(session)
     return {
+        "deliveryFee": float(fee) if fee is not None else None,
         "name": get_setting(session, "name", DEFAULT_NAME),
         "whatsapp": get_setting(session, "whatsapp", DEFAULT_WHATSAPP),
         "enabled": get_setting(session, "enabled", "1") == "1",
@@ -172,7 +185,7 @@ def is_first_order(session: Session, phone_digits: str) -> bool:
     return not prior
 
 
-def price_cart(session: Session, items: list[CartLine], phone: str, code: str = "") -> dict[str, Any]:
+def price_cart(session: Session, items: list[CartLine], phone: str, code: str = "", fulfillment: str = "RETIRO") -> dict[str, Any]:
     """Calcula el pedido en el servidor: los precios y descuentos nunca los decide el navegador."""
     merged: dict[int, int] = {}
     for line in items:
@@ -222,8 +235,10 @@ def price_cart(session: Session, items: list[CartLine], phone: str, code: str = 
                 coupon = {"code": candidate["code"], "label": candidate["label"], "gift": candidate["gift"]}
             else:
                 coupon_error, coupon_error_text = "BETTER", "La promoción automática de tu pedido ya descuenta más: el código no se usa"
-    total = subtotal - best_amount
+    fee = fixed_delivery_fee(session) if fulfillment == "ENTREGA" else None
+    total = subtotal - best_amount + (fee or Decimal("0"))
     return {
+        "deliveryFee": money(fee) if fee is not None else None,
         "lines": lines,
         "subtotal": money(subtotal),
         "discount": money(best_amount),
@@ -303,6 +318,7 @@ def register_portal_routes(app: FastAPI, get_db: Callable[..., Any], require_adm
             "name": settings["name"],
             "enabled": settings["enabled"],
             "whatsapp": digits_only(settings["whatsapp"]),
+            "deliveryFee": settings["deliveryFee"],
             "info": {"es": settings["infoEs"], "pt": settings["infoPt"] or settings["infoEs"], "en": settings["infoEn"] or settings["infoEs"]},
             "products": products,
             "promotions": [public_promotion(promo) for promo in live_promotions(session)],
@@ -310,7 +326,7 @@ def register_portal_routes(app: FastAPI, get_db: Callable[..., Any], require_adm
 
     @app.post("/api/portal/quote")
     def portal_quote(data: QuoteInput, session: Session = Depends(get_db)) -> dict[str, Any]:
-        priced = price_cart(session, data.items, data.phone, data.code)
+        priced = price_cart(session, data.items, data.phone, data.code, data.fulfillment)
         priced.pop("_evaluation", None)
         return priced
 
@@ -332,7 +348,7 @@ def register_portal_routes(app: FastAPI, get_db: Callable[..., Any], require_adm
         if (recent or 0) >= MAX_PENDING_PER_PHONE:
             raise HTTPException(status_code=429, detail="Ya enviaste varios pedidos. Espera la confirmación del local")
 
-        priced = price_cart(session, data.items, digits, data.code)
+        priced = price_cart(session, data.items, digits, data.code, data.fulfillment)
         if data.code.strip() and priced["coupon"] is None:
             raise HTTPException(status_code=422, detail=priced["couponErrorText"] or "El código no es válido")
         evaluation = priced.pop("_evaluation", None)
@@ -348,6 +364,7 @@ def register_portal_routes(app: FastAPI, get_db: Callable[..., Any], require_adm
             discount=Decimal(str(priced["discount"])),
             promo_title=priced["promotion"]["title"]["es"] if priced["promotion"] else (priced["coupon"]["label"][:80] if priced["coupon"] else ""),
             promo_code=priced["coupon"]["code"] if priced["coupon"] else "",
+            delivery_fee=Decimal(str(priced["deliveryFee"])) if priced["deliveryFee"] is not None else None,
             total=Decimal(str(priced["total"])),
             status="NUEVO",
             created_at=datetime.now(timezone.utc).replace(tzinfo=None),
@@ -390,6 +407,7 @@ def register_portal_routes(app: FastAPI, get_db: Callable[..., Any], require_adm
             "info.es": data.infoEs.strip(),
             "info.pt": data.infoPt.strip(),
             "info.en": data.infoEn.strip(),
+            "delivery_fee": "" if data.deliveryFee is None else str(Decimal(str(data.deliveryFee)).quantize(CENT)),
         }
         for key, value in values.items():
             session.merge(Setting(key=f"portal.{key}", value=value))

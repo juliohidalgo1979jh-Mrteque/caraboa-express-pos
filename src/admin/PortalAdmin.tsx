@@ -64,6 +64,7 @@ interface PortalSettings {
   infoEs: string;
   infoPt: string;
   infoEn: string;
+  deliveryFee: number | string | null;
 }
 
 const tabLabels: Record<Tab, string> = { orders: 'Pedidos online', promos: 'Promociones', texts: 'Traducciones', settings: 'Enlace y ajustes' };
@@ -469,7 +470,7 @@ function SettingsTab({ pin, onToast }: { pin: string; onToast: (message: string)
     if (!form) return;
     setSaving(true);
     setError('');
-    const result = await adminRequest<PortalSettings>('/api/portal/settings', 'PUT', form, pin);
+    const result = await adminRequest<PortalSettings>('/api/portal/settings', 'PUT', { ...form, deliveryFee: String(form.deliveryFee ?? '').trim() === '' ? null : Number(String(form.deliveryFee).replace(',', '.')) }, pin);
     setSaving(false);
     if (!result.ok) return setError(result.message);
     setForm(result.value);
@@ -506,6 +507,9 @@ function SettingsTab({ pin, onToast }: { pin: string; onToast: (message: string)
             <option value="1">Abierto: el portal recibe pedidos</option>
             <option value="0">Cerrado: el portal muestra el menú pero no recibe pedidos</option>
           </select>
+          <div><label className="field-label" htmlFor="portal-deliveryFee">Costo de envío fijo (R$)</label>
+            <input id="portal-deliveryFee" className="text-input" inputMode="decimal" placeholder="Ej.: 8,00" maxLength={8} value={String(form.deliveryFee ?? '')} onChange={(event) => setForm({ ...form, deliveryFee: event.target.value })} /></div>
+          <p className="heading-sub">Se cobra automáticamente a los pedidos con delivery y el cliente lo ve en su total. Si un pedido queda más lejos, puedes cambiar el monto de ese pedido (antes de que pague). Déjalo vacío para confirmar el costo pedido por pedido.</p>
           {field('infoEs', 'Mensaje bajo el nombre (español)', { maxLength: 200, placeholder: 'Delivery y retiro · Florianópolis' })}
           {field('infoPt', 'Mensaje en portugués', { maxLength: 200 })}
           {field('infoEn', 'Mensaje en inglés', { maxLength: 200 })}

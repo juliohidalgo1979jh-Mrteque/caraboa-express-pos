@@ -30,6 +30,7 @@ interface PortalData {
   enabled: boolean;
   whatsapp: string;
   info: Names;
+  deliveryFee: number | null;
   products: PortalProduct[];
   promotions: PortalPromo[];
 }
@@ -42,6 +43,7 @@ interface Quote {
   firstOrder: boolean | null;
   coupon: { code: string; label: string; gift: string } | null;
   couponError: string;
+  deliveryFee: number | null;
 }
 
 interface PlacedOrder {
@@ -55,6 +57,7 @@ interface PlacedOrder {
   discount: number;
   promotion: string;
   promotionTitles: Names | null;
+  deliveryFee: number | null;
   total: number;
   items: Array<{ name: string; quantity: number; unitPrice: number; subtotal: number }>;
 }
@@ -92,6 +95,7 @@ function whatsappText(order: PlacedOrder, businessName: string, lang: Lang): str
     '',
   ];
   if (order.discount > 0) lines.push(`Descuento (${order.promotion}): -${money(order.discount)}`);
+  if (order.fulfillment === 'ENTREGA' && order.deliveryFee !== null) lines.push(`Envío: ${money(order.deliveryFee)}`);
   lines.push(`*Total: ${money(order.total)}*`);
   if (order.notes) lines.push(`Notas: ${order.notes}`);
   lines.push(`Idioma del cliente: ${LANG_NAMES[lang]}`);
@@ -163,7 +167,7 @@ export default function Portal() {
         const response = await fetch('/api/portal/quote', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ phone: phoneDigits.length >= 8 ? phoneDigits : '', code: appliedCode, items: cartLines.map((line) => ({ productId: line.product.id, quantity: line.quantity })) }),
+          body: JSON.stringify({ phone: phoneDigits.length >= 8 ? phoneDigits : '', code: appliedCode, fulfillment, items: cartLines.map((line) => ({ productId: line.product.id, quantity: line.quantity })) }),
         });
         if (response.ok && seq === quoteSeq.current) setQuote(await response.json());
       } catch {
@@ -172,7 +176,7 @@ export default function Portal() {
     }, 250);
     return () => window.clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cartKey, phoneDigits, appliedCode]);
+  }, [cartKey, phoneDigits, appliedCode, fulfillment]);
 
   useEffect(() => {
     if (!sheetOpen) return;
@@ -267,7 +271,8 @@ export default function Portal() {
           </ul>
           {placed.discount > 0 && <p className="thanks-discount">{t.discount} ({placed.promotionTitles?.[lang] ?? placed.promotion}): −{money(placed.discount)}</p>}
           <p className="thanks-total">{t.total} <strong>{money(placed.total)}</strong></p>
-          {placed.fulfillment === 'ENTREGA' && <p className="hint">{t.deliveryFeeTbd}</p>}
+          {placed.fulfillment === 'ENTREGA' && placed.deliveryFee === null && <p className="hint">{t.deliveryFeeTbd}</p>}
+          {placed.fulfillment === 'ENTREGA' && placed.deliveryFee !== null && <p className="hint">{t.deliveryIncluded(money(placed.deliveryFee))}</p>}
           <p className="thanks-note">{link ? t.thanksWhatsapp : t.thanksNoWhatsapp}</p>
           {link && <a className="btn-primary whatsapp" href={link} target="_blank" rel="noopener noreferrer">{t.sendWhatsapp}</a>}
           <button className="btn-ghost" onClick={() => setPlaced(null)}>{t.newOrder}</button>
@@ -393,10 +398,11 @@ export default function Portal() {
                 <dl className="totals">
                   <div><dt>{t.subtotal}</dt><dd>{money(subtotal)}</dd></div>
                   {discount > 0 && quote?.promotion && <div className="discount"><dt>{t.discount} · {quote.promotion.title[lang]}</dt><dd>−{money(discount)}</dd></div>}
+                  {fulfillment === 'ENTREGA' && quote?.deliveryFee != null && <div><dt>{t.deliveryLine}</dt><dd>{money(quote.deliveryFee)}</dd></div>}
                   {discount > 0 && quote?.coupon && <div className="discount"><dt>{t.discount} · {quote.coupon.label}</dt><dd>−{money(discount)}</dd></div>}
                   <div className="grand"><dt>{t.total}</dt><dd>{money(total)}</dd></div>
                 </dl>
-                {fulfillment === 'ENTREGA' && <p className="hint">{t.deliveryFeeTbd}</p>}
+                {fulfillment === 'ENTREGA' && quote?.deliveryFee == null && <p className="hint">{t.deliveryFeeTbd}</p>}
 
                 <div className="coupon-box">
                   <label htmlFor="portal-code">{t.couponLabel}</label>
