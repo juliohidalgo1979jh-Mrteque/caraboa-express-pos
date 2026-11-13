@@ -271,6 +271,16 @@ export default function Portal() {
 
       {data && (
         <main>
+          <section className="hero" aria-label={data.name}>
+            <div className="hero-copy">
+              <p className="hero-kicker">{t.heroKicker}</p>
+              <h2>{t.heroTitle}</h2>
+              <p className="hero-text">{t.heroText}</p>
+              <a className="hero-cta" href="#menu">{t.heroCta} <span aria-hidden="true">↓</span></a>
+            </div>
+            <img className="hero-logo" src="/logo.png" alt="" width="220" height="250" />
+            <span className="hero-dot d1" aria-hidden="true" /><span className="hero-dot d2" aria-hidden="true" /><span className="hero-dot d3" aria-hidden="true" />
+          </section>
           {!open && (
             <div className="closed-banner" role="status"><Store size={20} /><div><strong>{t.closedTitle}</strong><span>{t.closedText}</span></div></div>
           )}
@@ -304,7 +314,7 @@ export default function Portal() {
           )}
 
           {products.length === 0 && <p className="state-message">{t.noProducts}</p>}
-          <ul className="menu">
+          <ul className="menu" id="menu">
             {visible.map((product) => {
               const quantity = cart[product.id] ?? 0;
               return (

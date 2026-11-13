@@ -56,6 +56,10 @@ export const strings = {
     items: (count: number) => (count === 1 ? '1 producto' : `${count} productos`),
     language: 'Idioma',
     poweredBy: 'Pedidos directos, sin comisión',
+    heroKicker: 'Pizza ❉ Burgers ❉ Tequeños',
+    heroTitle: 'Sabor que sonríe',
+    heroText: 'Hecho al momento, calentito y directo a tu puerta.',
+    heroCta: 'Ver el menú',
   },
   pt: {
     pickup: 'Retirar no local',
@@ -106,6 +110,10 @@ export const strings = {
     items: (count: number) => (count === 1 ? '1 item' : `${count} itens`),
     language: 'Idioma',
     poweredBy: 'Pedidos diretos, sem comissão',
+    heroKicker: 'Pizza ❉ Burgers ❉ Tequeños',
+    heroTitle: 'Sabor que sorri',
+    heroText: 'Feito na hora, quentinho e direto na sua porta.',
+    heroCta: 'Ver o cardápio',
   },
   en: {
     pickup: 'Pick up at the shop',
@@ -156,6 +164,10 @@ export const strings = {
     items: (count: number) => (count === 1 ? '1 item' : `${count} items`),
     language: 'Language',
     poweredBy: 'Direct orders, no commission',
+    heroKicker: 'Pizza ❉ Burgers ❉ Tequeños',
+    heroTitle: 'Flavor that smiles',
+    heroText: 'Made fresh, piping hot, straight to your door.',
+    heroCta: 'See the menu',
   },
 } as const;
 
