@@ -874,3 +874,19 @@ def test_customers_loyalty_and_rewards(tmp_path):
         assert c.post("/api/customers", headers=mgr, json={"name": "Beto", "phone": "123"}).status_code == 422
         assert c.delete(f"/api/customers/{found['id']}", headers=mgr).status_code == 403
         assert c.delete(f"/api/customers/{found['id']}", headers=own).status_code == 200
+
+
+def test_credit_card_account_negative_and_paid_by_transfer(tmp_path):
+    from fastapi.testclient import TestClient
+    app = create_app(database_url=f"sqlite:///{tmp_path}/t.db", frontend_dist=None, admin_pin="1111", manager_pin="2222")
+    with TestClient(app) as c:
+        owner = {"X-Admin-Pin": "1111"}
+        by = lambda: {a["key"]: a for a in c.get("/api/finance/accounts", headers=owner).json()["accounts"]}
+        assert c.put("/api/finance/opening", headers=owner, json={"start": "2026-11-01", "balances": {"CAJA": 200, "BANCO": 500, "MERCADOPAGO": 0, "TARJETA": -50}}).status_code == 200
+        assert by()["TARJETA"]["balance"] == -50
+        r = c.post("/api/expenses", headers=owner, json={"kind": "VARIABLE", "category": "Insumos", "description": "Compra con tarjeta", "amount": 120, "paidOn": "2026-11-10", "account": "TARJETA"})
+        assert r.status_code in (200, 201), r.text
+        assert by()["TARJETA"]["balance"] == -170 and by()["BANCO"]["balance"] == 500
+        assert c.post("/api/finance/transfers", headers=owner, json={"from": "BANCO", "to": "TARJETA", "amount": 100}).status_code == 201
+        assert by()["TARJETA"]["balance"] == -70 and by()["BANCO"]["balance"] == 400
+        assert c.post("/api/finance/audits", headers=owner, json={"account": "TARJETA", "counted": 0}).status_code == 422

@@ -13,7 +13,7 @@ from zoneinfo import ZoneInfo
 from .models import Equipment, Product, Purchase, PurchaseLine, RecipeLine, StockItem, StockLot, StockMovement, Supplier
 
 UNITS = ("unid", "kg", "g", "l", "ml")
-ACCOUNTS = ("CAJA", "BANCO", "MERCADOPAGO")
+ACCOUNTS = ("CAJA", "BANCO", "MERCADOPAGO", "TARJETA")
 WASTE_REASONS = ("VENCIDO", "DANADO", "DERRAMADO", "PREPARACION", "OTRO")
 EXPIRY_WARNING_DAYS = 7
 LOCAL_TZ = ZoneInfo("America/Sao_Paulo")
@@ -81,7 +81,7 @@ class PurchaseLineInput(BaseModel):
 class PurchaseInput(BaseModel):
     supplier_id: int | None = Field(default=None, alias="supplierId")
     document: str = Field(default="", max_length=60)
-    account: Literal["CAJA", "BANCO", "MERCADOPAGO"] = "CAJA"
+    account: Literal["CAJA", "BANCO", "MERCADOPAGO", "TARJETA"] = "CAJA"
     purchased_on: date | None = Field(default=None, alias="purchasedOn")
     note: str = Field(default="", max_length=200)
     lines: list[PurchaseLineInput] = Field(min_length=1, max_length=60)

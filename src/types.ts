@@ -187,7 +187,7 @@ export interface Comanda {
   printedAt: string | null;
 }
 
-export type AccountKey = 'CAJA' | 'BANCO' | 'MERCADOPAGO';
+export type AccountKey = 'CAJA' | 'BANCO' | 'MERCADOPAGO' | 'TARJETA';
 
 export interface Purchase {
   id: number;

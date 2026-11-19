@@ -12,6 +12,7 @@ type Tab = 'CUENTAS' | 'ARQUEOS' | 'CIERRES';
 type Dialog = 'TRANSFER' | 'INGRESO' | 'RETIRO' | 'OPENING' | 'AUDIT' | null;
 
 const ACCOUNT_KEYS = Object.keys(accountLabels) as AccountKey[];
+const AUDIT_KEYS = ACCOUNT_KEYS.filter((key) => key !== 'TARJETA');
 const kindLabels: Record<AccountMovement['kind'], string> = { TRANSFERENCIA: 'Transferencia', INGRESO: 'Ingreso', RETIRO: 'Retiro', AJUSTE_ARQUEO: 'Ajuste de arqueo' };
 const dateTime = new Intl.DateTimeFormat('es-AR', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
 const dayFormat = new Intl.DateTimeFormat('es-AR', { day: '2-digit', month: 'short' });
@@ -41,7 +42,7 @@ export function FinanceAdmin({ pin, onToast }: { pin: string; onToast: (message:
   const [note, setNote] = useState('');
   const [movedOn, setMovedOn] = useState('');
   const [startDate, setStartDate] = useState('');
-  const [initial, setInitial] = useState<Record<AccountKey, string>>({ CAJA: '', BANCO: '', MERCADOPAGO: '' });
+  const [initial, setInitial] = useState<Record<AccountKey, string>>({ CAJA: '', BANCO: '', MERCADOPAGO: '', TARJETA: '' });
   const [counts, setCounts] = useState<Breakdown>({});
   const [counted, setCounted] = useState('');
 
@@ -66,7 +67,7 @@ export function FinanceAdmin({ pin, onToast }: { pin: string; onToast: (message:
     if (preset) setAccount(preset);
     if (kind === 'OPENING' && overview) {
       setStartDate(overview.start ?? new Date().toISOString().slice(0, 10));
-      setInitial(Object.fromEntries(overview.accounts.map((item) => [item.key, item.initial ? String(item.initial).replace('.', ',') : ''])) as Record<AccountKey, string>);
+      setInitial(Object.fromEntries(overview.accounts.map((item) => [item.key, item.initial ? String(item.key === 'TARJETA' ? -item.initial : item.initial).replace('.', ',') : ''])) as Record<AccountKey, string>);
     }
     setDialog(kind);
   }
@@ -92,7 +93,7 @@ export function FinanceAdmin({ pin, onToast }: { pin: string; onToast: (message:
 
   async function submitOpening() {
     if (!startDate) { setError('Indica desde qué fecha se controla el dinero.'); return; }
-    const balances = Object.fromEntries(ACCOUNT_KEYS.map((key) => [key, parseMoney(initial[key]) || 0]));
+    const balances = Object.fromEntries(ACCOUNT_KEYS.map((key) => [key, (key === 'TARJETA' ? -Math.abs(parseMoney(initial[key]) || 0) : parseMoney(initial[key]) || 0)]));
     await send('/api/finance/opening', 'PUT', { start: startDate, balances }, 'Saldos iniciales guardados');
   }
 
@@ -126,18 +127,21 @@ export function FinanceAdmin({ pin, onToast }: { pin: string; onToast: (message:
             <strong className={item.balance < 0 ? 'negative' : ''}>{currency.format(item.balance)}</strong>
             <dl>
               <div><dt>Saldo inicial</dt><dd>{currency.format(item.initial)}</dd></div>
-              <div><dt>Ventas cobradas</dt><dd>+ {currency.format(item.sales)}</dd></div>
-              <div><dt>Compras, gastos y personal</dt><dd>− {currency.format(item.purchases + item.expenses + item.staff)}</dd></div>
-              <div><dt>Movimientos manuales</dt><dd>{item.movements < 0 ? '− ' : '+ '}{currency.format(Math.abs(item.movements))}</dd></div>
+              <div><dt>{item.key === 'TARJETA' ? 'Pagos a la tarjeta' : 'Ventas cobradas'}</dt><dd>+ {currency.format(item.key === 'TARJETA' ? item.movements : item.sales)}</dd></div>
+              <div><dt>{item.key === 'TARJETA' ? 'Compras con la tarjeta' : 'Compras, gastos y personal'}</dt><dd>− {currency.format(item.purchases + item.expenses + item.staff)}</dd></div>
+              {item.key !== 'TARJETA' && <div><dt>Movimientos manuales</dt><dd>{item.movements < 0 ? '− ' : '+ '}{currency.format(Math.abs(item.movements))}</dd></div>}
             </dl>
-            <button className="secondary-button" onClick={() => open('AUDIT', item.key)}>Arqueo</button>
+            {item.key === 'TARJETA'
+              ? <button className="secondary-button" onClick={() => { open('TRANSFER', 'BANCO'); setTarget('TARJETA'); }}>Pagar tarjeta</button>
+              : <button className="secondary-button" onClick={() => open('AUDIT', item.key)}>Arqueo</button>}
           </article>
         ))}
-        {overview && <article className="account-card total"><header><Landmark size={16} /><span>Total de dinero</span></header><strong>{currency.format(overview.total)}</strong><small className="muted">Suma de las tres cuentas{overview.start ? ` desde ${formatDay(overview.start)}` : ''}</small></article>}
+        {overview && <article className="account-card total"><header><Landmark size={16} /><span>Total de dinero</span></header><strong>{currency.format(overview.total)}</strong><small className="muted">Suma de las cuentas (la deuda de la tarjeta resta){overview.start ? ` desde ${formatDay(overview.start)}` : ''}</small></article>}
       </div>
 
       <div className="finance-actions">
         <button className="secondary-button" onClick={() => open('TRANSFER', 'CAJA')}><ArrowLeftRight size={15} /> Transferir entre cuentas</button>
+        <button className="secondary-button" onClick={() => { open('TRANSFER', 'BANCO'); setTarget('TARJETA'); }}><Landmark size={15} /> Pagar tarjeta de crédito</button>
         <button className="secondary-button" onClick={() => open('INGRESO', 'CAJA')}><TrendingUp size={15} /> Ingreso de dinero</button>
         <button className="secondary-button" onClick={() => open('RETIRO', 'CAJA')}><TrendingDown size={15} /> Retiro de dinero</button>
       </div>
@@ -187,7 +191,7 @@ export function FinanceAdmin({ pin, onToast }: { pin: string; onToast: (message:
           <p className="muted">Indica cuánto dinero hay hoy en cada cuenta. El sistema suma y resta desde esta fecha en adelante.</p>
           <label className="field-label" htmlFor="fin-start">Controlar desde</label>
           <input id="fin-start" className="text-input" type="date" value={startDate} onChange={(event) => setStartDate(event.target.value)} />
-          {ACCOUNT_KEYS.map((key) => <div key={key}><label className="field-label" htmlFor={`fin-init-${key}`}>{accountLabels[key]}</label>
+          {ACCOUNT_KEYS.map((key) => <div key={key}><label className="field-label" htmlFor={`fin-init-${key}`}>{key === 'TARJETA' ? 'Deuda actual de la tarjeta de crédito' : accountLabels[key]}</label>
             <div className="money-input"><span>R$</span><input id={`fin-init-${key}`} type="text" inputMode="decimal" autoComplete="off" value={initial[key]} onChange={(event) => setInitial({ ...initial, [key]: event.target.value })} placeholder="0,00" /></div></div>)}
           {error && <p className="form-error" role="alert">{error}</p>}
           <button className="modal-primary" type="submit" disabled={saving}>{saving ? 'Guardando…' : 'Guardar saldos'} <CheckCircle2 size={18} /></button>
@@ -197,7 +201,7 @@ export function FinanceAdmin({ pin, onToast }: { pin: string; onToast: (message:
       {dialog === 'AUDIT' && <Modal title="Arqueo de cuenta" eyebrow="FINANZAS" icon={<ListChecks size={19} />} onClose={() => setDialog(null)} wide>
         <form onSubmit={(event) => { event.preventDefault(); void submitAudit(); }}>
           <label className="field-label" htmlFor="aud-account">Cuenta</label>
-          <select id="aud-account" className="text-input" value={account} onChange={(event) => { setAccount(event.target.value as AccountKey); setCounts({}); setCounted(''); }}>{ACCOUNT_KEYS.map((key) => <option key={key} value={key}>{accountLabels[key]}</option>)}</select>
+          <select id="aud-account" className="text-input" value={account} onChange={(event) => { setAccount(event.target.value as AccountKey); setCounts({}); setCounted(''); }}>{AUDIT_KEYS.map((key) => <option key={key} value={key}>{accountLabels[key]}</option>)}</select>
           <p className="audit-expected">El sistema espera: <strong>{currency.format(expected)}</strong></p>
           {cashAudit
             ? <><span className="field-label">Cuenta el efectivo por denominación</span><Denominations value={counts} onChange={setCounts} /><p className="audit-expected">Contado: <strong>{currency.format(countedValue)}</strong></p></>

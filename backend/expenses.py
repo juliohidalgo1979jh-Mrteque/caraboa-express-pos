@@ -13,7 +13,7 @@ from sqlalchemy.orm import Session
 from .inventory import now_utc, today_local
 from .models import Expense, Purchase, Worker, WorkerPayment
 
-Account = Literal["CAJA", "BANCO", "MERCADOPAGO"]
+Account = Literal["CAJA", "BANCO", "MERCADOPAGO", "TARJETA"]
 
 
 class ExpenseInput(BaseModel):

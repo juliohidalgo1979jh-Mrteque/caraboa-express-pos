@@ -14,13 +14,13 @@ from sqlalchemy.orm import Session
 from .inventory import LOCAL_TZ, now_utc, today_local
 from .models import AccountAudit, AccountMovement, Expense, Purchase, PointOfSale, Sale, Setting, Shift, WorkerPayment
 
-ACCOUNTS = ("CAJA", "BANCO", "MERCADOPAGO")
-ACCOUNT_LABELS = {"CAJA": "Efectivo (caja)", "BANCO": "Banco / Pix", "MERCADOPAGO": "Mercado Pago"}
+ACCOUNTS = ("CAJA", "BANCO", "MERCADOPAGO", "TARJETA")
+ACCOUNT_LABELS = {"CAJA": "Efectivo (caja)", "BANCO": "Banco / Pix", "MERCADOPAGO": "Mercado Pago", "TARJETA": "Tarjeta de crédito"}
 # A qué cuenta entra cada medio de cobro: la tarjeta se liquida en el banco.
 SALE_ACCOUNT = {"EFECTIVO": "CAJA", "TARJETA": "BANCO", "QR": "BANCO", "TRANSFERENCIA": "BANCO", "MERCADO_PAGO": "MERCADOPAGO"}
 ZERO = Decimal("0")
 
-Account = Literal["CAJA", "BANCO", "MERCADOPAGO"]
+Account = Literal["CAJA", "BANCO", "MERCADOPAGO", "TARJETA"]
 
 
 class OpeningInput(BaseModel):
@@ -169,6 +169,8 @@ def register_finance_routes(app: FastAPI, get_db: Callable[..., Any], require_ad
 
     @app.post("/api/finance/audits", status_code=201, dependencies=admin)
     def audit(data: AuditInput, session: Session = Depends(get_db)) -> dict[str, Any]:
+        if data.account == "TARJETA":
+            raise HTTPException(status_code=422, detail="La tarjeta de crédito no se arquea: se paga con una transferencia")
         expected = balance_of(balances(session)[data.account])
         difference = data.counted - expected
         now = now_utc()

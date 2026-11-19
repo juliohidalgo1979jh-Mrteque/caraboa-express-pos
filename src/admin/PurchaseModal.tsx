@@ -5,7 +5,7 @@ import { adminRequest } from '../db';
 import type { AccountKey, StockItem, Supplier } from '../types';
 import { Modal } from './ui';
 
-export const accountLabels: Record<AccountKey, string> = { CAJA: 'Efectivo (caja)', BANCO: 'Banco / Pix', MERCADOPAGO: 'Mercado Pago' };
+export const accountLabels: Record<AccountKey, string> = { CAJA: 'Efectivo (caja)', BANCO: 'Banco / Pix', MERCADOPAGO: 'Mercado Pago', TARJETA: 'Tarjeta de crédito (se paga después)' };
 
 interface Line { itemId: number | ''; quantity: string; total: string; expiresOn: string }
 
