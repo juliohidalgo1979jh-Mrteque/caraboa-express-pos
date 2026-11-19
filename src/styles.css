@@ -726,3 +726,15 @@ button:not(.nav-item):not(.user-more) { min-height: 40px; }
 .backup-card p { margin: 0; color: var(--ink); font-size: 17px; line-height: 1.4; }
 .backup-button { display: inline-flex; width: 100%; align-items: center; justify-content: center; gap: 10px; min-height: 64px; font-size: 18px; }
 .backup-ok { color: #1b7a43 !important; font-weight: 700; }
+.qty-unit { display: grid; grid-template-columns: 1fr 84px; gap: 6px; align-items: center; }
+.unit-tag { padding: 0 6px; font-weight: 800; color: var(--muted); }
+.price-mode { display: grid; grid-template-columns: 1.4fr 1fr; gap: 4px; }
+.price-mode button { border: 2px solid #eadfd0; border-radius: 10px; background: #fff; font-size: 13px; font-weight: 700; cursor: pointer; }
+.price-mode button.selected { border-color: var(--orange); background: var(--orange); color: #fff; }
+.purchase-unit b { color: #1b7a43; font-size: 15px; }
+.purchase-line { grid-template-columns: minmax(0,1.8fr) minmax(0,1.3fr) minmax(0,1.5fr) minmax(0,1fr) minmax(0,1.1fr) 40px; }
+.purchase-line .purchase-unit { grid-column: 1 / -1; }
+@media (max-width:700px){ .purchase-line { grid-template-columns: 1fr 1fr; } .purchase-line .qty-unit, .purchase-line .price-mode { grid-column: 1 / -1; } }
+.purchase-line { grid-template-columns: minmax(0,1.5fr) minmax(0,1.7fr) minmax(0,1.6fr) minmax(0,1.1fr) minmax(0,1.2fr) 40px; }
+.qty-unit { grid-template-columns: minmax(70px,1fr) 78px; }
+.modal-wide { max-width: 1060px; }
