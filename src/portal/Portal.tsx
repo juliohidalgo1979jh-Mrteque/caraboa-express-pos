@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { CheckCircle2, MapPin, Minus, Plus, ShoppingBag, Store, Tag, X } from 'lucide-react';
+import { PayCard } from './PayCard';
 import { LANGS, LANG_NAMES, categoryLabel, detectLang, formatDate, formatMoney, strings, type Lang } from './i18n';
 
 type Names = Record<Lang, string>;
@@ -48,6 +49,7 @@ interface Quote {
 
 interface PlacedOrder {
   code: string;
+  payToken: string;
   name: string;
   phone: string;
   fulfillment: 'ENTREGA' | 'RETIRO';
@@ -257,6 +259,21 @@ export default function Portal() {
 
   const money = (value: number) => formatMoney(value, lang);
 
+  // Enlace de pago que se envía por WhatsApp: /pedir?pagar=W-0001.codigo
+  const payParam = new URLSearchParams(window.location.search).get('pagar');
+  if (payParam && !placed) {
+    const [payCode, ...rest] = payParam.split('.');
+    return (
+      <div className="portal">
+        <Header name={data?.name ?? 'Caraboa Express'} lang={lang} onLang={setLang} languageLabel={t.language} />
+        <main className="thanks">
+          <p className="thanks-code"><span>{t.thanksCode}</span><strong>{payCode}</strong></p>
+          <PayCard code={payCode} token={rest.join('.')} lang={lang} />
+        </main>
+      </div>
+    );
+  }
+
   if (placed && data) {
     const link = data.whatsapp ? `https://wa.me/${data.whatsapp}?text=${encodeURIComponent(whatsappText(placed, data.name, lang))}` : '';
     return (
@@ -273,6 +290,7 @@ export default function Portal() {
           <p className="thanks-total">{t.total} <strong>{money(placed.total)}</strong></p>
           {placed.fulfillment === 'ENTREGA' && placed.deliveryFee === null && <p className="hint">{t.deliveryFeeTbd}</p>}
           {placed.fulfillment === 'ENTREGA' && placed.deliveryFee !== null && <p className="hint">{t.deliveryIncluded(money(placed.deliveryFee))}</p>}
+          <PayCard code={placed.code} token={placed.payToken} lang={lang} />
           <p className="thanks-note">{link ? t.thanksWhatsapp : t.thanksNoWhatsapp}</p>
           {link && <a className="btn-primary whatsapp" href={link} target="_blank" rel="noopener noreferrer">{t.sendWhatsapp}</a>}
           <button className="btn-ghost" onClick={() => setPlaced(null)}>{t.newOrder}</button>

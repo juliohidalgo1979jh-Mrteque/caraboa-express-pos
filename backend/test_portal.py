@@ -226,3 +226,23 @@ def test_fixed_delivery_fee_is_applied_and_adjustable(tmp_path):
         client.put("/api/portal/settings", json={**base, "deliveryFee": None}, headers=PIN)
         again = client.post("/api/portal/orders", json=order(fulfillment="ENTREGA", address="Rua das Flores 10", items=items)).json()
         assert again["deliveryFee"] is None
+
+
+def test_payment_page_info_needs_secret_token_and_waits_for_delivery_fee(tmp_path):
+    with client_for(tmp_path) as client:
+        client.put("/api/settings/pix", json={"keyType": "EMAIL", "key": "caraboaexpress@gmail.com", "name": "Jose Caraballo", "city": "Florianopolis", "link": ""}, headers=PIN)
+        items = [{"productId": 1, "quantity": 1}]
+        pickup = client.post("/api/portal/orders", json=order(items=items)).json()
+        assert pickup["payToken"]
+        info = client.get(f"/api/portal/pay/{pickup['code']}", params={"t": pickup["payToken"]}).json()
+        assert info["ready"] and info["total"] == pickup["total"] and info["paid"] is False and info["pix"]["key"] == "caraboaexpress@gmail.com"
+        assert client.get(f"/api/portal/pay/{pickup['code']}", params={"t": "mal"}).status_code == 404
+        assert client.get(f"/api/portal/pay/{pickup['code']}").status_code == 404
+        assert client.get("/api/portal/pay/W-9999", params={"t": "x"}).status_code == 404
+        delivery = client.post("/api/portal/orders", json=order(fulfillment="ENTREGA", address="Rua A 1", items=items)).json()
+        assert client.get(f"/api/portal/pay/{delivery['code']}", params={"t": delivery["payToken"]}).json()["ready"] is False
+        client.put(f"/api/portal/orders/{delivery['id']}", json={"deliveryFee": 8}, headers=PIN)
+        ready = client.get(f"/api/portal/pay/{delivery['code']}", params={"t": delivery["payToken"]}).json()
+        assert ready["ready"] and ready["total"] == round(pickup["total"] + 8, 2)
+        client.put(f"/api/portal/orders/{pickup['id']}", json={"paid": True, "paymentMethod": "QR"}, headers=PIN)
+        assert client.get(f"/api/portal/pay/{pickup['code']}", params={"t": pickup["payToken"]}).json()["paid"] is True

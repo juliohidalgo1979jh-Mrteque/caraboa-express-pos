@@ -246,3 +246,18 @@ h1, h2, h3 { font-family: var(--display); }
 .coupon-btn:disabled { opacity: .5; cursor: default; box-shadow: none; }
 .coupon-ok { margin: 8px 0 0; font-size: 13px; font-weight: 600; color: #146c36; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 .coupon-err { margin: 8px 0 0; padding: 8px 10px; border-radius: 10px; background: #fff0ec; color: #8a1d0e; font-size: 13px; font-weight: 600; }
+
+/* Pago con Pix del cliente */
+.pay-card { display: grid; gap: 12px; justify-items: center; width: 100%; padding: 16px; border: 2.5px solid var(--ink); border-radius: 18px; background: white; box-shadow: 0 4px 0 var(--ink); }
+.pay-card h3 { margin: 0; font-size: 20px; }
+.pay-amount { margin: 0; display: grid; gap: 2px; }
+.pay-amount span { font-size: 13px; font-weight: 600; opacity: .7; }
+.pay-amount strong { font-family: 'Space Grotesk', sans-serif; font-size: 30px; }
+.pay-qr { display: grid; gap: 6px; justify-items: center; }
+.pay-qr > div { width: 220px; max-width: 70vw; }
+.pay-qr svg { display: block; width: 100%; height: auto; }
+.pay-key { margin: 0; display: grid; gap: 4px; font-size: 13px; }
+.pay-key-btn { border: 2px dashed var(--ink); border-radius: 10px; background: #fff8e1; padding: 8px 12px; font-weight: 800; font-size: 14px; cursor: pointer; word-break: break-all; }
+.pay-note { margin: 4px 0; padding: 10px 12px; border-radius: 12px; background: #fff8e1; font-weight: 600; font-size: 14px; }
+.pay-error { background: #fff0ec; color: #8a1d0e; }
+.pay-paid { display: flex; align-items: center; gap: 8px; background: #e6f6ec; color: #146c36; }

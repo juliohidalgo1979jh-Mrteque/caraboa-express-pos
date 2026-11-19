@@ -1,6 +1,7 @@
 """Portal de pedidos para clientes: carta pública en es/pt/en, promociones y pedidos que llegan por WhatsApp."""
 
 import re
+import secrets
 from datetime import date, datetime, timedelta, timezone
 from decimal import ROUND_HALF_UP, Decimal
 from typing import Any, Callable, Literal
@@ -13,6 +14,7 @@ from sqlalchemy.orm import Session
 from .coupons import CouponError, evaluate_code, redeem, release_order
 from .customers import credit_purchase, find_or_create_customer, serialize_reward
 from .inventory import deduct_stock_for_sale, now_utc, restore_stock_for_order
+from .pix import read_pix
 from .models import Category, OnlineOrder, Sale, SaleDetail, Shift, OnlineOrderItem, Product, ProductText, Promotion, Setting
 from .reports import LOCAL_TZ
 
@@ -271,6 +273,7 @@ def serialize_order(order: OnlineOrder, items: list[OnlineOrderItem]) -> dict[st
         "paid": order.paid_at is not None,
         "paidAt": order.paid_at.replace(tzinfo=timezone.utc).isoformat() if order.paid_at else None,
         "saleId": order.sale_id,
+        "payToken": order.pay_token,
         "status": order.status,
         "createdAt": order.created_at.replace(tzinfo=timezone.utc).isoformat(),
         "items": [{"name": item.name, "quantity": item.quantity, "unitPrice": float(item.unit_price), "subtotal": float(item.subtotal)} for item in items],
@@ -279,6 +282,29 @@ def serialize_order(order: OnlineOrder, items: list[OnlineOrderItem]) -> dict[st
 
 def register_portal_routes(app: FastAPI, get_db: Callable[..., Any], require_admin: Callable[..., None]) -> None:
     # ---------- Público (lo usan los clientes) ----------
+
+    # Página de pago del cliente: el enlace lleva un código secreto por pedido; muestra el Pix con el monto exacto.
+    @app.get("/api/portal/pay/{code}")
+    def pay_info(code: str, t: str = Query(default="", max_length=20), session: Session = Depends(get_db)) -> dict[str, Any]:
+        order = session.scalar(select(OnlineOrder).where(OnlineOrder.code == code.upper()))
+        if order is None or not order.pay_token or not secrets.compare_digest(order.pay_token, t):
+            raise HTTPException(status_code=404, detail="Pedido no encontrado")
+        pix = read_pix(session)
+        settings = read_settings(session)
+        waiting_fee = order.fulfillment == "ENTREGA" and order.delivery_fee is None
+        return {
+            "code": order.code,
+            "name": order.customer_name,
+            "lang": order.lang,
+            "fulfillment": order.fulfillment,
+            "total": float(order.total),
+            "deliveryFee": float(order.delivery_fee) if order.delivery_fee is not None else None,
+            "paid": order.paid_at is not None,
+            "cancelled": order.status == "CANCELADO",
+            "ready": not waiting_fee,
+            "pix": pix,
+            "whatsapp": digits_only(settings["whatsapp"]),
+        }
 
     @app.get("/api/portal")
     def portal_data(session: Session = Depends(get_db)) -> dict[str, Any]:
@@ -364,6 +390,7 @@ def register_portal_routes(app: FastAPI, get_db: Callable[..., Any], require_adm
             discount=Decimal(str(priced["discount"])),
             promo_title=priced["promotion"]["title"]["es"] if priced["promotion"] else (priced["coupon"]["label"][:80] if priced["coupon"] else ""),
             promo_code=priced["coupon"]["code"] if priced["coupon"] else "",
+            pay_token=secrets.token_urlsafe(9)[:12],
             delivery_fee=Decimal(str(priced["deliveryFee"])) if priced["deliveryFee"] is not None else None,
             total=Decimal(str(priced["total"])),
             status="NUEVO",
