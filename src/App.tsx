@@ -49,7 +49,7 @@ import { InventoryAdmin } from './admin/InventoryAdmin';
 import { PointsAdmin } from './admin/PointsAdmin';
 import { PixSettings } from './admin/PixSettings';
 import { PixCharge } from './PixCharge';
-import { Denominations, breakdownTotal, cleanBreakdown, type Breakdown } from './Denominations';
+import { Denominations, breakdownText, breakdownTotal, cleanBreakdown, type Breakdown } from './Denominations';
 import type { PixConfig } from './pix';
 import { RecipesAdmin } from './admin/RecipesAdmin';
 import { ReportsAdmin } from './admin/ReportsAdmin';
@@ -70,7 +70,7 @@ import { adminRequest, db, deleteProduct, nextOrderNumber, readCachedHeading, re
 import type { CartItem, LocalSale, LocalShift, PaymentMethod, PointOfSale, PosHeading, Product } from './types';
 
 type Screen = 'pos' | 'history' | 'menu' | 'kitchen' | 'reports' | 'inventory' | 'recipes' | 'suppliers' | 'equipment' | 'points' | 'portal' | 'expenses' | 'finance' | 'users' | 'customers' | 'coupons';
-type Dialog = 'open' | 'close' | 'checkout' | 'receipt' | 'product' | 'heading' | 'point' | null;
+type Dialog = 'open' | 'close' | 'closed' | 'checkout' | 'receipt' | 'product' | 'heading' | 'point' | null;
 
 interface ProductDraft {
   id?: number;
@@ -183,6 +183,7 @@ function App() {
   const [adminName, setAdminName] = useState('');
   const [customerPhone, setCustomerPhone] = useState('');
   const [customerName, setCustomerName] = useState('');
+  const [closedSummary, setClosedSummary] = useState<{ shift: LocalShift; expected: number } | null>(null);
   const [couponInput, setCouponInput] = useState('');
   const [coupon, setCoupon] = useState<{ code: string; label: string; discount: number; gift: string } | null>(null);
   const [couponMsg, setCouponMsg] = useState('');
@@ -392,8 +393,9 @@ function App() {
       await db.shifts.put(closed);
       await db.queue.add({ type: 'shift.close', clientId: closed.id, payload: { ...closed } });
     });
+    setClosedSummary({ shift: closed, expected: expectedCash });
     setActiveShift(null);
-    setActiveDialog(null);
+    setActiveDialog('closed');
     setClosingCounts({});
     setToast(`Turno cerrado · diferencia ${currency.format(amount - expectedCash)}`);
     const result = await syncQueue();
@@ -819,11 +821,29 @@ function App() {
           <p className="eyebrow">CIERRE DE JORNADA</p>
           <h2 id="close-title">Arqueo de caja</h2>
           <p className="modal-copy">Cuenta el efectivo físico por billetes y monedas. La diferencia se calcula contra lo esperado.</p>
+          <div className="close-summary">
+            <div><span>Abriste con</span><strong>{currency.format(activeShift?.openingCash ?? 0)}</strong><small>{breakdownText(activeShift?.openingBreakdown)}</small></div>
+            <div><span>Ventas en efectivo</span><strong>+ {currency.format(cashSales)}</strong></div>
+          </div>
           <p className="field-label">Efectivo contado <span>BRL</span></p>
           <Denominations value={closingCounts} onChange={setClosingCounts} />
           <div className="change-row"><span>Efectivo esperado</span><strong>{currency.format(expectedCash)}</strong></div>
           <div className={`change-row ${breakdownTotal(closingCounts) - expectedCash === 0 ? 'balanced' : ''}`}><span>Diferencia</span><strong>{currency.format(breakdownTotal(closingCounts) - expectedCash)}</strong></div>
           <button className="modal-primary" onClick={() => void closeShift()}>Cerrar turno <CheckCircle2 size={18} /></button>
+        </section>}
+
+        {activeDialog === 'closed' && closedSummary && <section className="modal shift-modal" role="dialog" aria-modal="true" aria-labelledby="closed-title">
+          <div className="modal-topline"><span className="modal-symbol green"><CheckCircle2 size={20} /></span><button className="icon-button" onClick={() => setActiveDialog(null)} aria-label="Cerrar"><X size={18} /></button></div>
+          <p className="eyebrow">TURNO CERRADO</p>
+          <h2 id="closed-title">Resumen del cierre</h2>
+          <div className="close-summary">
+            <div><span>Apertura</span><strong>{currency.format(closedSummary.shift.openingCash)}</strong><small>{breakdownText(closedSummary.shift.openingBreakdown)}</small></div>
+            <div><span>Efectivo esperado</span><strong>{currency.format(closedSummary.expected)}</strong></div>
+            <div><span>Efectivo contado</span><strong>{currency.format(closedSummary.shift.closingCash ?? 0)}</strong><small>{breakdownText(closedSummary.shift.closingBreakdown)}</small></div>
+          </div>
+          <div className={`change-row ${(closedSummary.shift.closingCash ?? 0) - closedSummary.expected === 0 ? 'balanced' : ''}`}><span>Diferencia</span><strong>{currency.format((closedSummary.shift.closingCash ?? 0) - closedSummary.expected)}</strong></div>
+          <p className="modal-copy">Este detalle queda guardado en Finanzas → Turnos.</p>
+          <button className="modal-primary" onClick={() => setActiveDialog(null)}>Listo <CheckCircle2 size={18} /></button>
         </section>}
 
         {activeDialog === 'receipt' && lastSale && <section className="receipt-modal" role="dialog" aria-modal="true" aria-labelledby="receipt-title"><div className="receipt-actions"><span className="saved-badge"><CheckCircle2 size={15} /> Venta guardada</span><button className="icon-button" onClick={() => setActiveDialog(null)} aria-label="Cerrar ticket"><X size={18} /></button></div><div className="receipt-paper"><div className="receipt-brand"><span className="receipt-brand-mark has-logo"><img src="/logo.png" alt="" /></span><strong>caraboa express</strong><small>FOOD TRUCK · PUNTO DE VENTA</small></div>{lastSale.orderCode && <div className="receipt-order"><small>PEDIDO</small><strong>{lastSale.orderCode}</strong></div>}<div className="receipt-divider" /><div className="receipt-meta"><span>{lastSale.orderCode ? <>Pedido <strong>{lastSale.orderCode}</strong></> : <>Ticket <strong>#{lastSale.id.slice(0, 6).toUpperCase()}</strong></>}</span><span>{new Intl.DateTimeFormat('es', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(lastSale.createdAt))}</span></div><div className="receipt-items">{lastSale.items.map((item, index) => <div key={`${item.productId}-${index}`}><span>{item.quantity} × {item.name}</span><strong>{currency.format(item.subtotal)}</strong></div>)}</div><div className="receipt-divider" /><div className="receipt-subtotals"><div><span>Subtotal</span><strong>{currency.format(lastSale.subtotal)}</strong></div>{!!lastSale.discount && <div><span>Descuento{lastSale.promoCode ? ` (${lastSale.promoCode})` : ''}</span><strong>−{currency.format(lastSale.discount)}</strong></div>}{!!lastSale.promoGift && <div><span>Regalo</span><strong>{lastSale.promoGift}</strong></div>}<div><span>Propina</span><strong>{currency.format(lastSale.tip)}</strong></div>{!!lastSale.deliveryFee && <div><span>Envío</span><strong>{currency.format(lastSale.deliveryFee)}</strong></div>}</div><div className="receipt-total"><span>TOTAL</span><strong>{currency.format(lastSale.total)}</strong></div><div className="receipt-payment"><span>Pago · {paymentLabels[lastSale.paymentMethod] ?? lastSale.paymentMethod}</span>{lastSale.pointName && <span>Punto · {lastSale.pointName}</span>}{lastSale.paymentMethod === 'EFECTIVO' && <><span>Recibido · {currency.format(lastSale.amountReceived)}</span><span>Cambio · {currency.format(lastSale.changeGiven)}</span></>}</div><div className="receipt-thanks">¡Gracias por comer rico!<small>Hecho con cariño en Caraboa Express</small></div></div><ReceiptShare sale={lastSale} /><div className="receipt-buttons"><button className="secondary-button" onClick={() => void printHtml(receiptHtml(lastSale))}><Printer size={16} /> Imprimir ticket</button><button className="modal-primary" onClick={() => { setActiveDialog(null); setActiveScreen('pos'); }}><Coffee size={17} /> Nuevo pedido</button></div></section>}

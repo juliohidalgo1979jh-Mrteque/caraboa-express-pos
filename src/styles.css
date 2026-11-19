@@ -670,3 +670,8 @@ a.order-send-total{text-decoration:none;text-align:center}
 
 .portal-toolbar-actions { display: flex; gap: 8px; align-items: center; }
 .danger-outline { color: #b3261e; border-color: #b3261e; display: inline-flex; align-items: center; gap: 6px; }
+
+.close-summary { display: grid; gap: 8px; margin: 10px 0; padding: 12px; border-radius: 12px; background: rgba(0,0,0,.04); }
+.close-summary > div { display: grid; grid-template-columns: 1fr auto; gap: 2px 10px; align-items: baseline; }
+.close-summary span { font-size: 13px; opacity: .75; }
+.close-summary small { grid-column: 1 / -1; font-size: 12px; opacity: .65; }

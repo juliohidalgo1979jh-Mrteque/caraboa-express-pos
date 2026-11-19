@@ -53,3 +53,11 @@ export function Denominations({ value, onChange }: DenominationsProps) {
     </div>
   );
 }
+
+const denomText = (key: string) => `R$ ${Number(key).toString().replace('.', ',')}`;
+
+/** Lista legible del conteo: "5× R$ 20 · 2× R$ 5". */
+export function breakdownText(value: Breakdown | null | undefined): string {
+  if (!value || Object.keys(value).length === 0) return 'sin detalle';
+  return Object.keys(value).sort((a, b) => Number(b) - Number(a)).map((key) => `${value[key]}× ${denomText(key)}`).join(' · ');
+}
