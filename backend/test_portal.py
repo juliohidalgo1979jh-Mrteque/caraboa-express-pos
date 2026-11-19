@@ -177,8 +177,15 @@ def test_online_order_deducts_stock_once_when_accepted_and_restores_on_cancel(tm
         assert stock() == 100
 
 
+
+def no_fixed_fee(client):
+    """Para probar el envío 'a confirmar': el dueño deja vacío el costo fijo (por defecto es R$ 6,00)."""
+    assert client.put("/api/portal/settings", json={"name": "Portal", "whatsapp": "5548988102993", "enabled": True, "deliveryFee": None}, headers=PIN).status_code == 200
+
+
 def test_online_delivery_fee_and_sale_on_delivery(tmp_path):
     with client_for(tmp_path) as client:
+        no_fixed_fee(client)
         placed = client.post("/api/portal/orders", json=order(fulfillment="ENTREGA", address="Rua das Flores 10", items=[{"productId": 1, "quantity": 1}])).json()
         oid, base = placed["id"], placed["total"]
         assert placed["deliveryFee"] is None
@@ -209,7 +216,7 @@ def test_online_delivery_fee_and_sale_on_delivery(tmp_path):
 
 def test_fixed_delivery_fee_is_applied_and_adjustable(tmp_path):
     with client_for(tmp_path) as client:
-        assert client.get("/api/portal").json()["deliveryFee"] is None
+        assert client.get("/api/portal").json()["deliveryFee"] == 6  # valor inicial
         base = {"name": "Portal", "whatsapp": "5548988102993", "enabled": True}
         assert client.put("/api/portal/settings", json={**base, "deliveryFee": 8}, headers=PIN).json()["deliveryFee"] == 8
         assert client.get("/api/portal").json()["deliveryFee"] == 8
@@ -231,6 +238,7 @@ def test_fixed_delivery_fee_is_applied_and_adjustable(tmp_path):
 def test_payment_page_info_needs_secret_token_and_waits_for_delivery_fee(tmp_path):
     with client_for(tmp_path) as client:
         client.put("/api/settings/pix", json={"keyType": "EMAIL", "key": "caraboaexpress@gmail.com", "name": "Jose Caraballo", "city": "Florianopolis", "link": ""}, headers=PIN)
+        no_fixed_fee(client)
         items = [{"productId": 1, "quantity": 1}]
         pickup = client.post("/api/portal/orders", json=order(items=items)).json()
         assert pickup["payToken"]

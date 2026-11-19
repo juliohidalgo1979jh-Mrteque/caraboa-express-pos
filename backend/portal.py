@@ -119,9 +119,13 @@ def get_setting(session: Session, key: str, default: str = "") -> str:
     return setting.value if setting is not None else default
 
 
+# Envío fijo por defecto (R$ 6,00) mientras el dueño no lo cambie en Portal de pedidos → Enlace y ajustes.
+DEFAULT_DELIVERY_FEE = "6.00"
+
+
 def fixed_delivery_fee(session: Session) -> Decimal | None:
     """Costo de envío fijo configurado por el dueño; None = se confirma pedido por pedido."""
-    raw = get_setting(session, "delivery_fee", "").strip()
+    raw = get_setting(session, "delivery_fee", DEFAULT_DELIVERY_FEE).strip()
     try:
         return Decimal(raw).quantize(CENT) if raw else None
     except ArithmeticError:
