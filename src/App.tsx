@@ -1,6 +1,8 @@
+import { HomeMenu } from './HomeMenu';
 import { useEffect, useMemo, useState } from 'react';
 import {
   ArrowDownToLine,
+  ArrowLeft,
   ArrowRight,
   BarChart3,
   BookOpen,
@@ -69,7 +71,7 @@ import { currency, formatOrderCode, moneyInputValue, parseMoney, paymentLabels, 
 import { adminRequest, db, deleteProduct, nextOrderNumber, readCachedHeading, readCachedOrderNumbers, readCachedPix, readCachedPoints, readDevicePoint, refreshHeading, refreshPix, refreshMenu, refreshOrderNumbers, refreshPoints, resizeImage, saveHeading, saveProduct, setProductImage, storeDevicePoint, syncQueue } from './db';
 import type { CartItem, LocalSale, LocalShift, PaymentMethod, PointOfSale, PosHeading, Product } from './types';
 
-type Screen = 'pos' | 'history' | 'menu' | 'kitchen' | 'reports' | 'inventory' | 'recipes' | 'suppliers' | 'equipment' | 'points' | 'portal' | 'expenses' | 'finance' | 'users' | 'customers' | 'coupons';
+type Screen = 'home' | 'pos' | 'history' | 'menu' | 'kitchen' | 'reports' | 'inventory' | 'recipes' | 'suppliers' | 'equipment' | 'points' | 'portal' | 'expenses' | 'finance' | 'users' | 'customers' | 'coupons';
 type Dialog = 'open' | 'close' | 'closed' | 'checkout' | 'receipt' | 'product' | 'heading' | 'point' | null;
 
 interface ProductDraft {
@@ -85,6 +87,7 @@ interface ProductDraft {
 }
 
 const screenTitles: Record<Screen, string> = {
+  home: 'Inicio',
   pos: 'Punto de venta',
   history: 'Ventas',
   menu: 'Carta',
@@ -148,7 +151,7 @@ function makeId(): string {
 }
 
 function App() {
-  const [activeScreen, setActiveScreen] = useState<Screen>('pos');
+  const [activeScreen, setActiveScreen] = useState<Screen>('home');
   const [activeDialog, setActiveDialog] = useState<Dialog>(null);
   const [activeShift, setActiveShift] = useState<LocalShift | null>(null);
   const [sales, setSales] = useState<LocalSale[]>([]);
@@ -222,7 +225,7 @@ function App() {
     if (result.ok) { setCoupon(result.value); setCouponMsg(''); } else { setCoupon(null); setCouponMsg(result.message); }
   }
   const screenAllowed = (screen: Screen) => (adminRole === 'CAJERO' ? screen === 'portal' : screen === 'users' ? adminRole === 'DUENO' || adminRole === null : true);
-  function signOut() { storePin(''); setAdminPin(''); setAdminVerified(false); setAdminRole(null); setAdminName(''); setActiveScreen('pos'); }
+  function signOut() { storePin(''); setAdminPin(''); setAdminVerified(false); setAdminRole(null); setAdminName(''); setActiveScreen('home'); }
   const orderAlerts = useOrderAlerts(isOnline ? adminPin : '', activeScreen === 'portal');
   const allowedMethods = devicePoint?.methods.length ? devicePoint.methods : paymentMethods;
   const [serverOrderNumbers, setServerOrderNumbers] = useState(readCachedOrderNumbers);
@@ -613,7 +616,7 @@ function App() {
   return (
     <div className="app-shell">
       <aside className="sidebar">
-        <a className="brand" href="#pos" onClick={() => setActiveScreen('pos')} aria-label="Caraboa Express, inicio">
+        <a className="brand" href="#inicio" onClick={() => setActiveScreen('home')} aria-label="Caraboa Express, inicio">
           <span className="brand-mark has-logo"><img src="/logo.png" alt="" /></span>
           <span className="brand-copy"><strong>caraboa express</strong><small>food truck · POS</small></span>
         </a>
@@ -664,11 +667,17 @@ function App() {
 
       <main className="workspace">
         <header className="topbar">
-          <div className="breadcrumb"><span>Caraboa Express</span><ArrowRight size={14} /><strong>{screenTitles[activeScreen]}</strong></div>
+          <div className="breadcrumb">{activeScreen !== 'home' && <button className="back-button" onClick={() => setActiveScreen('home')} aria-label="Volver al menú"><ArrowLeft size={20} /> Atrás</button>}<span>Caraboa Express</span><ArrowRight size={14} /><strong>{screenTitles[activeScreen]}</strong></div>
           <div className="topbar-right"><span className="date-label"><Clock3 size={15} />{dateLabel}</span><span className="topbar-divider" /><span className="live-indicator"><i />{activeShift ? 'Turno activo' : 'Sin turno'}</span></div>
         </header>
 
-            {activeScreen === 'pos' ? (
+            {activeScreen === 'home' ? (
+          <HomeMenu
+            operation={[{ key: 'pos', label: 'Punto de venta', icon: <ShoppingBag size={44} /> }, { key: 'history', label: 'Ventas', icon: <History size={44} /> }, { key: 'menu', label: 'Carta', icon: <BookOpen size={44} /> }, { key: 'kitchen', label: 'Comandas', icon: <ChefHat size={44} /> }].filter((tile) => adminRole !== 'CAJERO' || tile.key === 'pos' || tile.key === 'history' || tile.key === 'menu' || tile.key === 'kitchen')}
+            admin={adminScreens.filter(({ screen }) => screenAllowed(screen)).map(({ screen, icon: Icon }) => ({ key: screen, label: screenTitles[screen], icon: <Icon size={44} />, badge: screen === 'portal' ? orderAlerts.newCount : 0 }))}
+            onOpen={(key) => setActiveScreen(key as Screen)}
+          />
+        ) : activeScreen === 'pos' ? (
           <div className="pos-layout">
             <section className="catalog-area">
               <div className="page-heading">

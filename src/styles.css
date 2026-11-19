@@ -696,3 +696,29 @@ button:not(.nav-item):not(.user-more) { min-height: 40px; }
 .product-card { border-width: 2px; }
 .product-name { white-space: normal; line-height: 1.25; }
 @media (max-width: 620px) { .topbar { padding: 0 14px; } .date-label, .topbar-divider, .breadcrumb > span:first-child, .breadcrumb > svg { display: none; } .live-indicator { font-size: 13px; white-space: nowrap; } }
+
+/* Menú de inicio con botones grandes + botón Atrás */
+.back-button { display: inline-flex; align-items: center; gap: 6px; min-height: 44px; padding: 0 16px 0 12px; margin-right: 10px; border: 2px solid var(--orange); border-radius: 12px; background: #fff; color: #b8452a; font-size: 16px; font-weight: 800; cursor: pointer; }
+.back-button:hover { background: var(--orange); color: #fff; }
+.home-page { padding: 24px 28px 40px; max-width: 1000px; }
+.home-hero { display: flex; align-items: center; gap: 16px; margin-bottom: 22px; }
+.home-hero img { width: 72px; height: 72px; object-fit: contain; }
+.home-hero h1 { margin: 0; font-family: 'Space Grotesk', sans-serif; font-size: 30px; }
+.home-hero p { margin: 4px 0 0; font-size: 17px; color: var(--muted); }
+.home-group { margin-bottom: 26px; }
+.home-title { display: flex; align-items: center; gap: 10px; margin: 0 0 12px; font-size: 16px; font-weight: 800; letter-spacing: 1px; color: var(--orange); }
+.home-title i { width: 14px; height: 14px; border-radius: 4px; background: currentColor; }
+.home-title.adm { color: #a07a10; }
+.home-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 14px; }
+.home-tile { position: relative; display: flex; min-height: 150px; flex-direction: column; align-items: center; justify-content: center; gap: 12px; padding: 14px 10px; border: 2px solid #eadfd0; border-bottom: 7px solid var(--orange); border-radius: 22px; background: #fff; color: var(--ink); cursor: pointer; }
+.home-tile:active, .home-tile:hover { background: #fff3ec; }
+.home-icon { color: var(--orange); }
+.home-label { font-size: 19px; font-weight: 800; line-height: 1.2; text-align: center; }
+.home-badge { position: absolute; top: 10px; right: 12px; min-width: 28px; padding: 3px 8px; border-radius: 99px; background: #d92d20; color: #fff; font-size: 15px; text-align: center; }
+@media (max-width: 820px) {
+  .sidebar { display: none; }
+  .workspace { margin-left: 0; }
+  .home-page { padding: 16px 14px 90px; }
+  .home-grid { grid-template-columns: repeat(2, 1fr); }
+  .home-tile { min-height: 140px; }
+}
