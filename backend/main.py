@@ -20,6 +20,7 @@ from .catalog import PRODUCTS, TONES, TRANSLATIONS
 from .models import Base, Category, PointOfSale, Product, ProductImage, ProductText, Sale, Setting, Shift
 from .expenses import register_expense_routes
 from .finance import register_finance_routes
+from .backup import register_backup_routes
 from .coupons import CouponError, evaluate_code, redeem, register_coupon_routes
 from .customers import credit_purchase, find_or_create_customer, register_customer_routes
 from .users import Auth, register_user_routes
@@ -479,6 +480,7 @@ def create_app(
     register_kitchen_routes(app, get_db)
     register_portal_routes(app, get_db, require_admin)
     register_pix_routes(app, get_db, require_admin)
+    register_backup_routes(app, get_db, require_admin)
 
     @app.get("/api/settings/heading")
     def get_heading(session: Session = Depends(get_db)) -> dict[str, str]:

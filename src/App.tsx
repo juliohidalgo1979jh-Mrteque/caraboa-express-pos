@@ -1,8 +1,10 @@
+import { BackupAdmin } from './admin/BackupAdmin';
 import { HomeMenu } from './HomeMenu';
 import { useEffect, useMemo, useState } from 'react';
 import {
   ArrowDownToLine,
   ArrowLeft,
+  Download,
   ArrowRight,
   BarChart3,
   BookOpen,
@@ -71,7 +73,7 @@ import { currency, formatOrderCode, moneyInputValue, parseMoney, paymentLabels, 
 import { adminRequest, db, deleteProduct, nextOrderNumber, readCachedHeading, readCachedOrderNumbers, readCachedPix, readCachedPoints, readDevicePoint, refreshHeading, refreshPix, refreshMenu, refreshOrderNumbers, refreshPoints, resizeImage, saveHeading, saveProduct, setProductImage, storeDevicePoint, syncQueue } from './db';
 import type { CartItem, LocalSale, LocalShift, PaymentMethod, PointOfSale, PosHeading, Product } from './types';
 
-type Screen = 'home' | 'pos' | 'history' | 'menu' | 'kitchen' | 'reports' | 'inventory' | 'recipes' | 'suppliers' | 'equipment' | 'points' | 'portal' | 'expenses' | 'finance' | 'users' | 'customers' | 'coupons';
+type Screen = 'home' | 'pos' | 'history' | 'menu' | 'kitchen' | 'reports' | 'inventory' | 'recipes' | 'suppliers' | 'equipment' | 'points' | 'portal' | 'expenses' | 'finance' | 'users' | 'customers' | 'coupons' | 'backup';
 type Dialog = 'open' | 'close' | 'closed' | 'checkout' | 'receipt' | 'product' | 'heading' | 'point' | null;
 
 interface ProductDraft {
@@ -104,6 +106,7 @@ const screenTitles: Record<Screen, string> = {
   users: 'Usuarios',
   customers: 'Clientes y fidelidad',
   coupons: 'Códigos promocionales',
+  backup: 'Copia de seguridad',
 };
 
 const adminScreens: Array<{ screen: Screen; icon: typeof Package }> = [
@@ -119,6 +122,7 @@ const adminScreens: Array<{ screen: Screen; icon: typeof Package }> = [
   { screen: 'points', icon: MonitorSmartphone },
   { screen: 'portal', icon: Globe },
   { screen: 'users', icon: UserCog },
+  { screen: 'backup', icon: Download },
 ];
 
 const paymentIcons: Record<PaymentMethod, typeof CreditCard> = {
@@ -224,7 +228,7 @@ function App() {
     setCouponBusy(false);
     if (result.ok) { setCoupon(result.value); setCouponMsg(''); } else { setCoupon(null); setCouponMsg(result.message); }
   }
-  const screenAllowed = (screen: Screen) => (adminRole === 'CAJERO' ? screen === 'portal' : screen === 'users' ? adminRole === 'DUENO' || adminRole === null : true);
+  const screenAllowed = (screen: Screen) => (adminRole === 'CAJERO' ? screen === 'portal' : (screen === 'users' || screen === 'backup') ? adminRole === 'DUENO' || adminRole === null : true);
   function signOut() { storePin(''); setAdminPin(''); setAdminVerified(false); setAdminRole(null); setAdminName(''); setActiveScreen('home'); }
   const orderAlerts = useOrderAlerts(isOnline ? adminPin : '', activeScreen === 'portal');
   const allowedMethods = devicePoint?.methods.length ? devicePoint.methods : paymentMethods;
@@ -639,7 +643,7 @@ function App() {
 
         <div className="sidebar-section-label admin-label">ADMINISTRACIÓN</div>
         <nav className="side-nav" aria-label="Administración">
-          {adminScreens.filter(({ screen }) => screen !== 'users' || adminRole === 'DUENO' || adminRole === null).filter(({ screen }) => adminRole !== 'CAJERO' || screen === 'portal').map(({ screen, icon: Icon }) => <button key={screen} className={`nav-item ${activeScreen === screen ? 'active' : ''}`} onClick={() => setActiveScreen(screen)} aria-label={screenTitles[screen]} title={screenTitles[screen]}>
+          {adminScreens.filter(({ screen }) => (screen !== 'users' && screen !== 'backup') || adminRole === 'DUENO' || adminRole === null).filter(({ screen }) => adminRole !== 'CAJERO' || screen === 'portal').map(({ screen, icon: Icon }) => <button key={screen} className={`nav-item ${activeScreen === screen ? 'active' : ''}`} onClick={() => setActiveScreen(screen)} aria-label={screenTitles[screen]} title={screenTitles[screen]}>
             <Icon size={18} /><span>{screenTitles[screen]}</span>{screen === 'portal' && orderAlerts.newCount > 0 && <b className="nav-badge" aria-label={`${orderAlerts.newCount} pedidos nuevos`}>{orderAlerts.newCount}</b>}
           </button>)}
         </nav>
@@ -741,6 +745,7 @@ function App() {
             {activeScreen === 'expenses' && <ExpensesAdmin pin={adminPin} onToast={setToast} />}
             {activeScreen === 'finance' && <FinanceAdmin pin={adminPin} onToast={setToast} />}
             {activeScreen === 'points' && <><PointsAdmin pin={adminPin} points={points} devicePointId={devicePoint?.id ?? null} onSaved={savePoint} /><PixSettings pin={adminPin} config={pixConfig} onSaved={setPixConfig} /></>}
+            {activeScreen === 'backup' && <BackupAdmin pin={adminPin} onToast={setToast} />}
             {activeScreen === 'users' && <UsersAdmin pin={adminPin} onToast={setToast} />}
             {activeScreen === 'coupons' && <CouponsAdmin pin={adminPin} onToast={setToast} />}
             {activeScreen === 'customers' && <CustomersAdmin pin={adminPin} menu={menu} onToast={setToast} />}

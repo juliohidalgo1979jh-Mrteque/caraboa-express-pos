@@ -25,7 +25,7 @@ ACTION_LABELS = (
     ("/api/purchases", "compras"), ("/api/waste", "mermas"), ("/api/stock-items", "inventario"), ("/api/suppliers", "proveedores"),
     ("/api/equipment", "equipos"), ("/api/products", "la carta"), ("/api/expenses", "gastos"), ("/api/workers", "personal"),
     ("/api/worker-payments", "pagos al personal"), ("/api/finance", "finanzas"), ("/api/portal/orders", "pedidos online"),
-    ("/api/portal", "portal de pedidos"), ("/api/points", "puntos de venta"), ("/api/settings", "ajustes"), ("/api/users", "usuarios"),
+    ("/api/portal", "portal de pedidos"), ("/api/points", "puntos de venta"), ("/api/settings", "ajustes"), ("/api/users", "usuarios"), ("/api/backup", "copia de seguridad"),
     ("/api/customers", "clientes"), ("/api/promo-codes", "códigos promocionales"), ("/api/loyalty", "fidelidad"), ("/api/shifts", "turnos"),
 )
 VERBS = {"POST": "Registró", "PUT": "Modificó", "DELETE": "Eliminó"}
@@ -109,6 +109,8 @@ class Auth:
             self.failures[client].append(now)
             raise HTTPException(status_code=401, detail="PIN incorrecto")
         path, method = request.url.path, request.method
+        if path.startswith("/api/backup") and actor.role != "DUENO":
+            raise HTTPException(status_code=403, detail="La copia de seguridad es solo para el dueño")
         if path.startswith("/api/users") and actor.role != "DUENO":
             raise HTTPException(status_code=403, detail="Solo el dueño puede gestionar usuarios")
         if actor.role == "ENCARGADO" and (method == "DELETE" or (path.startswith(OWNER_ONLY_PATHS) and method != "GET")):

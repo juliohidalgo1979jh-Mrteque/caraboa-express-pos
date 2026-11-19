@@ -890,3 +890,15 @@ def test_credit_card_account_negative_and_paid_by_transfer(tmp_path):
         assert c.post("/api/finance/transfers", headers=owner, json={"from": "BANCO", "to": "TARJETA", "amount": 100}).status_code == 201
         assert by()["TARJETA"]["balance"] == -70 and by()["BANCO"]["balance"] == 400
         assert c.post("/api/finance/audits", headers=owner, json={"account": "TARJETA", "counted": 0}).status_code == 422
+
+
+def test_backup_download_owner_only(tmp_path):
+    from fastapi.testclient import TestClient
+    app = create_app(database_url=f"sqlite:///{tmp_path}/b.db", frontend_dist=None, admin_pin="1111", manager_pin="2222")
+    with TestClient(app) as c:
+        assert c.get("/api/backup").status_code == 401
+        assert c.get("/api/backup", headers={"X-Admin-Pin": "2222"}).status_code == 403
+        r = c.get("/api/backup", headers={"X-Admin-Pin": "1111"})
+        assert r.status_code == 200 and "attachment" in r.headers["content-disposition"]
+        data = r.json()
+        assert data["app"] == "caraboa-express-pos" and "ventas" in data["tables"] and "usuarios_app" not in data["tables"]
