@@ -738,3 +738,4 @@ button:not(.nav-item):not(.user-more) { min-height: 40px; }
 .purchase-line { grid-template-columns: minmax(0,1.5fr) minmax(0,1.7fr) minmax(0,1.6fr) minmax(0,1.1fr) minmax(0,1.2fr) 40px; }
 .qty-unit { grid-template-columns: minmax(70px,1fr) 78px; }
 .modal-wide { max-width: 1060px; }
+.unit-select { min-height: 38px; border: 0; background: transparent; font-weight: 800; font-size: 15px; color: var(--ink); }

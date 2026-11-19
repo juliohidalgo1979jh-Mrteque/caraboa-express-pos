@@ -1,3 +1,4 @@
+import { UNIT_FAMILY, factor } from './PurchaseModal';
 import { useMemo, useState } from 'react';
 import { Calculator, CheckCircle2, Pencil, Plus, Trash2 } from 'lucide-react';
 import { currency, moneyInputValue, parseMoney } from '../data';
@@ -17,7 +18,13 @@ interface LineDraft {
   key: number;
   itemId: number | null;
   quantity: string;
+  unit: string;
 }
+
+// Las recetas se escriben en gramos o mililitros; el sistema convierte a la unidad del artículo (ej. 150 g = 0,15 kg).
+const entryUnit = (unit: string) => (unit === 'kg' || unit === 'g' ? 'g' : unit === 'l' || unit === 'ml' ? 'ml' : unit);
+const lineUnit = (line: { unit: string }, item?: { unit: string }) => line.unit || (item ? entryUnit(item.unit) : '');
+const inItemUnit = (line: { quantity: string; unit: string }, item?: { unit: string }) => (parseMoney(line.quantity) || 0) * (item ? factor(lineUnit(line, item), item.unit) : 1);
 
 interface RecipeDraft {
   product: Product;
@@ -51,7 +58,7 @@ export function RecipesAdmin({ pin, menu, onProductSaved, onProductDeleted, onTo
     setError('');
     setDraft({
       product,
-      lines: (summary?.lines ?? []).map((line) => ({ key: ++lineKey, itemId: line.itemId, quantity: numberInputValue(line.quantity) })),
+      lines: (summary?.lines ?? []).map((line) => { const item = itemById.get(line.itemId); const unit = item ? entryUnit(item.unit) : ''; return { key: ++lineKey, itemId: line.itemId, unit, quantity: numberInputValue(Math.round((item ? line.quantity * factor(item.unit, unit) : line.quantity) * 10000) / 10000) }; }),
       margin: numberInputValue(summary?.margin ?? 60),
       price: moneyInputValue(product.price),
     });
@@ -59,7 +66,7 @@ export function RecipesAdmin({ pin, menu, onProductSaved, onProductDeleted, onTo
 
   const draftCost = draft ? draft.lines.reduce((sum, line) => {
     const item = line.itemId ? itemById.get(line.itemId) : undefined;
-    const quantity = parseMoney(line.quantity);
+    const quantity = inItemUnit(line, item);
     return item && quantity > 0 ? sum + item.unitCost * quantity : sum;
   }, 0) : 0;
   const draftMargin = draft ? parseMoney(draft.margin) : Number.NaN;
@@ -74,7 +81,7 @@ export function RecipesAdmin({ pin, menu, onProductSaved, onProductDeleted, onTo
   async function save() {
     if (!draft) return;
     const lines = draft.lines.filter((line) => line.itemId !== null || line.quantity.trim());
-    const parsed = lines.map((line) => ({ itemId: line.itemId, quantity: parseMoney(line.quantity) }));
+    const parsed = lines.map((line) => ({ itemId: line.itemId, quantity: Math.round(inItemUnit(line, line.itemId ? itemById.get(line.itemId) : undefined) * 10000) / 10000 }));
     if (parsed.some((line) => line.itemId === null || !(line.quantity > 0))) {
       setError('Cada línea necesita un artículo y una cantidad mayor a cero.');
       return;
@@ -161,20 +168,20 @@ export function RecipesAdmin({ pin, menu, onProductSaved, onProductDeleted, onTo
           <div className="recipe-lines">
             {draft.lines.map((line) => {
               const item = line.itemId ? itemById.get(line.itemId) : undefined;
-              const quantity = parseMoney(line.quantity);
+              const quantity = inItemUnit(line, item);
               return <div className="recipe-line" key={line.key}>
-                <select className="text-input" aria-label="Artículo" value={line.itemId ?? ''} onChange={(event) => updateLine(line.key, { itemId: event.target.value ? Number(event.target.value) : null })}>
+                <select className="text-input" aria-label="Artículo" value={line.itemId ?? ''} onChange={(event) => updateLine(line.key, { itemId: event.target.value ? Number(event.target.value) : null, unit: '' })}>
                   <option value="">Elegir artículo…</option>
                   <optgroup label="Productos">{selectableItems.filter((option) => option.kind === 'PRODUCTO').map((option) => <option key={option.id} value={option.id}>{option.name}</option>)}</optgroup>
                   <optgroup label="Insumos">{selectableItems.filter((option) => option.kind === 'INSUMO').map((option) => <option key={option.id} value={option.id}>{option.name}</option>)}</optgroup>
                 </select>
-                <div className="money-input recipe-quantity"><input aria-label="Cantidad" type="text" inputMode="decimal" autoComplete="off" value={line.quantity} onChange={(event) => updateLine(line.key, { quantity: event.target.value })} placeholder="0" /><span>{item?.unit ?? ''}</span></div>
+                <div className="money-input recipe-quantity"><input aria-label="Cantidad" type="text" inputMode="decimal" autoComplete="off" value={line.quantity} onChange={(event) => updateLine(line.key, { quantity: event.target.value })} placeholder="0" />{item && UNIT_FAMILY[item.unit] ? <select aria-label="Unidad" className="unit-select" value={lineUnit(line, item)} onChange={(event) => updateLine(line.key, { unit: event.target.value })}>{[...UNIT_FAMILY[item.unit]].reverse().map((u) => <option key={u} value={u}>{u}</option>)}</select> : <span>{item?.unit ?? ''}</span>}</div>
                 <span className="recipe-line-cost">{item && quantity > 0 ? currency.format(item.unitCost * quantity) : '—'}</span>
                 <button type="button" className="icon-button" onClick={() => setDraft({ ...draft, lines: draft.lines.filter((other) => other.key !== line.key) })} aria-label="Quitar artículo"><Trash2 size={15} /></button>
               </div>;
             })}
           </div>
-          <button type="button" className="secondary-button add-line" onClick={() => setDraft({ ...draft, lines: [...draft.lines, { key: ++lineKey, itemId: null, quantity: '' }] })}><Plus size={14} /> Agregar artículo</button>
+          <button type="button" className="secondary-button add-line" onClick={() => setDraft({ ...draft, lines: [...draft.lines, { key: ++lineKey, itemId: null, quantity: '', unit: '' }] })}><Plus size={14} /> Agregar artículo</button>
 
           <div className="checkout-breakdown recipe-summary"><div><span>Costo total</span><strong>{currency.format(draftCost)}</strong></div></div>
           <div className="product-form-row">
@@ -183,7 +190,7 @@ export function RecipesAdmin({ pin, menu, onProductSaved, onProductDeleted, onTo
           </div>
           {draftSuggested !== null && <div className="suggested-price"><span>Precio sugerido <small>(redondeado a $10)</small></span><strong>{currency.format(draftSuggested)}</strong><button type="button" className="secondary-button" onClick={() => setDraft({ ...draft, price: moneyInputValue(draftSuggested) })}>Usar este precio</button></div>}
           {draftCost > 0 && draftPrice >= 0 && <div className={`change-row ${draftPrice - draftCost < 0 ? 'negative' : 'balanced'}`}><span>Ganancia con el precio elegido</span><strong>{currency.format(draftPrice - draftCost)} · {Math.round(((draftPrice - draftCost) / draftCost) * 100)}%</strong></div>}
-          {draft.lines.length > 0 && <p className="modal-copy form-hint">Cada venta descuenta: {draft.lines.filter((line) => line.itemId).map((line) => { const item = itemById.get(line.itemId!); const quantity = parseMoney(line.quantity); return item && quantity > 0 ? `${formatQuantity(quantity, item.unit)} de ${item.name}` : null; }).filter(Boolean).join(', ') || '—'}.</p>}
+          {draft.lines.length > 0 && <p className="modal-copy form-hint">Cada venta descuenta: {draft.lines.filter((line) => line.itemId).map((line) => { const item = itemById.get(line.itemId!); const quantity = inItemUnit(line, item); return item && quantity > 0 ? `${UNIT_FAMILY[item.unit] ? `${line.quantity} ${lineUnit(line, item)}` : formatQuantity(quantity, item.unit)} de ${item.name}` : null; }).filter(Boolean).join(', ') || '—'}.</p>}
           {error && <p className="form-error" role="alert">{error}</p>}
           <button className="modal-primary" type="submit" disabled={saving}>{saving ? 'Guardando…' : 'Guardar receta y precio'} <CheckCircle2 size={18} /></button>
         </form>

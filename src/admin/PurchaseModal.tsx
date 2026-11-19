@@ -10,11 +10,11 @@ export const accountLabels: Record<AccountKey, string> = { CAJA: 'Efectivo (caja
 interface Line { itemId: number | ''; quantity: string; unit: string; mode: 'UNIT' | 'TOTAL'; price: string; total: string; expiresOn: string }
 
 // Unidades en las que se puede comprar según cómo se controla el artículo (el stock se guarda en la unidad del artículo).
-const UNIT_FAMILY: Record<string, string[]> = { g: ['kg', 'g'], kg: ['kg', 'g'], ml: ['l', 'ml'], l: ['l', 'ml'] };
+export const UNIT_FAMILY: Record<string, string[]> = { g: ['kg', 'g'], kg: ['kg', 'g'], ml: ['l', 'ml'], l: ['l', 'ml'] };
 const TO_BASE: Record<string, number> = { kg: 1000, g: 1, l: 1000, ml: 1 };
 const BASE_OF: Record<string, string> = { kg: 'g', g: 'g', l: 'ml', ml: 'ml' };
 /** Cuántas unidades del artículo equivale 1 unidad comprada (ej. artículo en g, compra en kg → 1000). */
-const factor = (bought: string, itemUnit: string) => (BASE_OF[bought] && BASE_OF[bought] === BASE_OF[itemUnit] ? TO_BASE[bought] / TO_BASE[itemUnit] : 1);
+export const factor = (bought: string, itemUnit: string) => (BASE_OF[bought] && BASE_OF[bought] === BASE_OF[itemUnit] ? TO_BASE[bought] / TO_BASE[itemUnit] : 1);
 
 interface PurchaseModalProps {
   pin: string;
