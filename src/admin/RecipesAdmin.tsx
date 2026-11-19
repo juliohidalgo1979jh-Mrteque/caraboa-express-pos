@@ -1,9 +1,11 @@
 import { UNIT_FAMILY, factor } from './PurchaseModal';
+import { SubRecipes } from './SubRecipes';
+import { entryUnit, inItemUnit, lineUnit } from './recipeUnits';
 import { useMemo, useState } from 'react';
 import { Calculator, CheckCircle2, Pencil, Plus, Trash2 } from 'lucide-react';
 import { currency, moneyInputValue, parseMoney } from '../data';
 import { adminRequest, deleteProduct, saveProduct } from '../db';
-import type { Product, RecipeSummary, StockItem } from '../types';
+import type { Product, RecipeSummary, StockItem, SubRecipe } from '../types';
 import { ConfirmDelete, formatQuantity, Modal, numberInputValue, useAdminList } from './ui';
 
 interface RecipesAdminProps {
@@ -21,14 +23,12 @@ interface LineDraft {
   unit: string;
 }
 
-// Las recetas se escriben en gramos o mililitros; el sistema convierte a la unidad del artículo (ej. 150 g = 0,15 kg).
-const entryUnit = (unit: string) => (unit === 'kg' || unit === 'g' ? 'g' : unit === 'l' || unit === 'ml' ? 'ml' : unit);
-const lineUnit = (line: { unit: string }, item?: { unit: string }) => line.unit || (item ? entryUnit(item.unit) : '');
-const inItemUnit = (line: { quantity: string; unit: string }, item?: { unit: string }) => (parseMoney(line.quantity) || 0) * (item ? factor(lineUnit(line, item), item.unit) : 1);
+interface SubLineDraft { key: number; subId: number | null; quantity: string }
 
 interface RecipeDraft {
   product: Product;
   lines: LineDraft[];
+  subLines: SubLineDraft[];
   margin: string;
   price: string;
 }
@@ -44,6 +44,8 @@ let lineKey = 0;
 export function RecipesAdmin({ pin, menu, onProductSaved, onProductDeleted, onToast }: RecipesAdminProps) {
   const { items: costs, error: loadError, reload } = useAdminList<RecipeSummary>('/api/menu-costs', pin);
   const { items: stockItems } = useAdminList<StockItem>('/api/stock-items', pin);
+  const { items: subs, reload: reloadSubs } = useAdminList<SubRecipe>('/api/sub-recipes', pin);
+  const subById = useMemo(() => new Map(subs.map((sub) => [sub.id, sub])), [subs]);
   const [draft, setDraft] = useState<RecipeDraft | null>(null);
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
@@ -59,6 +61,7 @@ export function RecipesAdmin({ pin, menu, onProductSaved, onProductDeleted, onTo
     setDraft({
       product,
       lines: (summary?.lines ?? []).map((line) => { const item = itemById.get(line.itemId); const unit = item ? entryUnit(item.unit) : ''; return { key: ++lineKey, itemId: line.itemId, unit, quantity: numberInputValue(Math.round((item ? line.quantity * factor(item.unit, unit) : line.quantity) * 10000) / 10000) }; }),
+      subLines: (summary?.subLines ?? []).map((line) => ({ key: ++lineKey, subId: line.subId, quantity: numberInputValue(line.quantity) })),
       margin: numberInputValue(summary?.margin ?? 60),
       price: moneyInputValue(product.price),
     });
@@ -68,7 +71,7 @@ export function RecipesAdmin({ pin, menu, onProductSaved, onProductDeleted, onTo
     const item = line.itemId ? itemById.get(line.itemId) : undefined;
     const quantity = inItemUnit(line, item);
     return item && quantity > 0 ? sum + item.unitCost * quantity : sum;
-  }, 0) : 0;
+  }, 0) + (draft ? draft.subLines.reduce((sum, line) => { const sub = line.subId ? subById.get(line.subId) : undefined; return sub ? sum + sub.unitCost * (parseMoney(line.quantity) || 0) : sum; }, 0) : 0) : 0;
   const draftMargin = draft ? parseMoney(draft.margin) : Number.NaN;
   const draftSuggested = suggest(draftCost, draftMargin);
   const draftPrice = draft ? parseMoney(draft.price) : Number.NaN;
@@ -90,6 +93,16 @@ export function RecipesAdmin({ pin, menu, onProductSaved, onProductDeleted, onTo
       setError('Hay un artículo repetido en la receta.');
       return;
     }
+    const subLines = draft.subLines.filter((line) => line.subId !== null || line.quantity.trim());
+    const parsedSubs = subLines.map((line) => ({ subId: line.subId, quantity: parseMoney(line.quantity) }));
+    if (parsedSubs.some((line) => line.subId === null || !(line.quantity > 0))) {
+      setError('Cada subreceta necesita una cantidad mayor a cero.');
+      return;
+    }
+    if (new Set(parsedSubs.map((line) => line.subId)).size !== parsedSubs.length) {
+      setError('Hay una subreceta repetida en la receta.');
+      return;
+    }
     if (!(draftPrice >= 0)) {
       setError('El precio de venta no es válido.');
       return;
@@ -100,7 +113,7 @@ export function RecipesAdmin({ pin, menu, onProductSaved, onProductDeleted, onTo
       return;
     }
     setSaving(true);
-    const recipe = await adminRequest<RecipeSummary>(`/api/products/${draft.product.id}/recipe`, 'PUT', { lines: parsed, margin }, pin);
+    const recipe = await adminRequest<RecipeSummary>(`/api/products/${draft.product.id}/recipe`, 'PUT', { lines: parsed, subLines: parsedSubs, margin }, pin);
     if (!recipe.ok) {
       setSaving(false);
       setError(recipe.message);
@@ -145,11 +158,12 @@ export function RecipesAdmin({ pin, menu, onProductSaved, onProductDeleted, onTo
       <div className="history-table-wrap"><table className="history-table menu-table"><thead><tr><th>ÍTEM DE LA CARTA</th><th>RECETA</th><th className="align-right">COSTO</th><th className="align-right">PRECIO</th><th className="align-right">GANANCIA</th><th /></tr></thead><tbody>
         {menu.map((product) => {
           const summary = costByProduct.get(product.id);
-          const hasRecipe = Boolean(summary?.lines.length);
+          const partCount = (summary?.lines.length ?? 0) + (summary?.subLines?.length ?? 0);
+          const hasRecipe = partCount > 0;
           const profit = hasRecipe && summary ? product.price - summary.cost : null;
           return <tr key={product.id} className={product.active ? '' : 'is-hidden'} onClick={() => edit(product)}>
             <td><strong>{product.name}</strong></td>
-            <td>{hasRecipe ? `${summary!.lines.length} ${summary!.lines.length === 1 ? 'artículo' : 'artículos'}` : <span className="sync-label">Sin receta</span>}</td>
+            <td>{hasRecipe ? `${partCount} ${partCount === 1 ? 'artículo' : 'artículos'}${summary!.subLines?.length ? ` (${summary!.subLines.length} subreceta${summary!.subLines.length === 1 ? '' : 's'})` : ''}` : <span className="sync-label">Sin receta</span>}</td>
             <td className="align-right">{hasRecipe ? currency.format(summary!.cost) : '—'}</td>
             <td className="align-right"><strong>{currency.format(product.price)}</strong></td>
             <td className={`align-right ${profit !== null && profit < 0 ? 'negative' : ''}`}>{profit !== null ? <>{currency.format(profit)}{summary!.cost > 0 && <small> · {Math.round((profit / summary!.cost) * 100)}%</small>}</> : '—'}</td>
@@ -157,6 +171,8 @@ export function RecipesAdmin({ pin, menu, onProductSaved, onProductDeleted, onTo
           </tr>;
         })}
       </tbody></table></div>
+
+      <SubRecipes pin={pin} subs={subs} items={stockItems} onChanged={() => { void reloadSubs(); void reload(); }} onToast={onToast} />
 
       {toDelete && <ConfirmDelete title={`¿Eliminar "${toDelete.name}"?`} error={error} busy={saving} onCancel={() => setToDelete(null)} onConfirm={() => void confirmDelete()}
         message="Desaparece de la carta, del punto de venta y de esta lista en todos los dispositivos. Las ventas que ya tuvo se conservan en los reportes. Si solo se agotó, mejor ocúltalo desde Carta." />}
@@ -181,7 +197,24 @@ export function RecipesAdmin({ pin, menu, onProductSaved, onProductDeleted, onTo
               </div>;
             })}
           </div>
+          {draft.subLines.length > 0 && <span className="field-label">Subrecetas</span>}
+          <div className="recipe-lines">
+            {draft.subLines.map((line) => {
+              const sub = line.subId ? subById.get(line.subId) : undefined;
+              const quantity = parseMoney(line.quantity) || 0;
+              return <div className="recipe-line" key={line.key}>
+                <select className="text-input" aria-label="Subreceta" value={line.subId ?? ''} onChange={(event) => setDraft({ ...draft, subLines: draft.subLines.map((other) => (other.key === line.key ? { ...other, subId: event.target.value ? Number(event.target.value) : null } : other)) })}>
+                  <option value="">Elegir subreceta…</option>
+                  {subs.map((option) => <option key={option.id} value={option.id}>{option.name}</option>)}
+                </select>
+                <div className="money-input recipe-quantity"><input aria-label="Cantidad de subreceta" type="text" inputMode="decimal" autoComplete="off" value={line.quantity} onChange={(event) => setDraft({ ...draft, subLines: draft.subLines.map((other) => (other.key === line.key ? { ...other, quantity: event.target.value } : other)) })} placeholder="0" /><span>{sub?.yieldUnit ?? ''}</span></div>
+                <span className="recipe-line-cost">{sub && quantity > 0 ? currency.format(sub.unitCost * quantity) : '—'}</span>
+                <button type="button" className="icon-button" onClick={() => setDraft({ ...draft, subLines: draft.subLines.filter((other) => other.key !== line.key) })} aria-label="Quitar subreceta"><Trash2 size={15} /></button>
+              </div>;
+            })}
+          </div>
           <button type="button" className="secondary-button add-line" onClick={() => setDraft({ ...draft, lines: [...draft.lines, { key: ++lineKey, itemId: null, quantity: '', unit: '' }] })}><Plus size={14} /> Agregar artículo</button>
+          <button type="button" className="secondary-button add-line" disabled={subs.length === 0} title={subs.length === 0 ? 'Primero crea una subreceta' : ''} onClick={() => setDraft({ ...draft, subLines: [...draft.subLines, { key: ++lineKey, subId: null, quantity: '' }] })}><Plus size={14} /> Agregar subreceta</button>
 
           <div className="checkout-breakdown recipe-summary"><div><span>Costo total</span><strong>{currency.format(draftCost)}</strong></div></div>
           <div className="product-form-row">
@@ -190,7 +223,7 @@ export function RecipesAdmin({ pin, menu, onProductSaved, onProductDeleted, onTo
           </div>
           {draftSuggested !== null && <div className="suggested-price"><span>Precio sugerido <small>(redondeado a $10)</small></span><strong>{currency.format(draftSuggested)}</strong><button type="button" className="secondary-button" onClick={() => setDraft({ ...draft, price: moneyInputValue(draftSuggested) })}>Usar este precio</button></div>}
           {draftCost > 0 && draftPrice >= 0 && <div className={`change-row ${draftPrice - draftCost < 0 ? 'negative' : 'balanced'}`}><span>Ganancia con el precio elegido</span><strong>{currency.format(draftPrice - draftCost)} · {Math.round(((draftPrice - draftCost) / draftCost) * 100)}%</strong></div>}
-          {draft.lines.length > 0 && <p className="modal-copy form-hint">Cada venta descuenta: {draft.lines.filter((line) => line.itemId).map((line) => { const item = itemById.get(line.itemId!); const quantity = inItemUnit(line, item); return item && quantity > 0 ? `${UNIT_FAMILY[item.unit] ? `${line.quantity} ${lineUnit(line, item)}` : formatQuantity(quantity, item.unit)} de ${item.name}` : null; }).filter(Boolean).join(', ') || '—'}.</p>}
+          {(draft.lines.length > 0 || draft.subLines.length > 0) && <p className="modal-copy form-hint">Cada venta descuenta: {draft.lines.filter((line) => line.itemId).map((line) => { const item = itemById.get(line.itemId!); const quantity = inItemUnit(line, item); return item && quantity > 0 ? `${UNIT_FAMILY[item.unit] ? `${line.quantity} ${lineUnit(line, item)}` : formatQuantity(quantity, item.unit)} de ${item.name}` : null; }).filter(Boolean).join(', ') || '—'}.</p>}
           {error && <p className="form-error" role="alert">{error}</p>}
           <button className="modal-primary" type="submit" disabled={saving}>{saving ? 'Guardando…' : 'Guardar receta y precio'} <CheckCircle2 size={18} /></button>
         </form>

@@ -21,6 +21,7 @@ from .models import Base, Category, PointOfSale, Product, ProductImage, ProductT
 from .expenses import register_expense_routes
 from .finance import register_finance_routes
 from .backup import register_backup_routes
+from .subrecipes import register_subrecipe_routes
 from .coupons import CouponError, evaluate_code, redeem, register_coupon_routes
 from .customers import credit_purchase, find_or_create_customer, register_customer_routes
 from .users import Auth, register_user_routes
@@ -471,6 +472,7 @@ def create_app(
 
     register_point_routes(app, get_db, require_admin, local_day_bounds)
     register_inventory_routes(app, get_db, require_admin)
+    register_subrecipe_routes(app, get_db, require_admin)
     register_expense_routes(app, get_db, require_admin)
     register_finance_routes(app, get_db, require_admin)
     register_user_routes(app, get_db, auth)

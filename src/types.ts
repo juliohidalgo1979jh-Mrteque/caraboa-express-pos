@@ -123,8 +123,20 @@ export interface StockMovement {
   createdAt: string;
 }
 
+export interface SubRecipe {
+  id: number;
+  name: string;
+  yieldQuantity: number;
+  yieldUnit: 'g' | 'ml' | 'unid';
+  lines: Array<{ itemId: number; name: string; unit: StockUnit; quantity: number; unitCost: number; lineCost: number }>;
+  batchCost: number;
+  unitCost: number;
+  usedIn: string[];
+}
+
 export interface RecipeSummary {
   productId: number;
+  subLines: Array<{ subId: number; name: string; unit: 'g' | 'ml' | 'unid'; quantity: number; unitCost: number; lineCost: number }>;
   lines: Array<{ itemId: number; name: string; kind: StockKind; unit: StockUnit; quantity: number; unitCost: number; lineCost: number }>;
   cost: number;
   price: number;

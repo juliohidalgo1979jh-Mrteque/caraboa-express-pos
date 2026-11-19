@@ -151,6 +151,41 @@ class RecipeLine(Base):
     quantity: Mapped[Decimal] = mapped_column("cantidad", Numeric(12, 3), nullable=False)
 
 
+class SubRecipe(Base):
+    """Preparación reutilizable (masa, salsa…): lo que rinde un lote y los insumos que lleva."""
+
+    __tablename__ = "subrecetas"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    name: Mapped[str] = mapped_column("nombre", String(100), nullable=False)
+    yield_quantity: Mapped[Decimal] = mapped_column("rendimiento", Numeric(12, 3), nullable=False)
+    yield_unit: Mapped[str] = mapped_column("unidad", String(10), nullable=False)
+
+
+class SubRecipeLine(Base):
+    """Cuánto de un artículo lleva un lote completo de la subreceta (en la unidad del artículo)."""
+
+    __tablename__ = "subrecetas_lineas"
+    __table_args__ = (UniqueConstraint("subreceta_id", "articulo_id"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    sub_id: Mapped[int] = mapped_column("subreceta_id", ForeignKey("subrecetas.id", ondelete="CASCADE"), nullable=False)
+    item_id: Mapped[int] = mapped_column("articulo_id", ForeignKey("articulos_stock.id"), nullable=False)
+    quantity: Mapped[Decimal] = mapped_column("cantidad", Numeric(12, 3), nullable=False)
+
+
+class RecipeSubLine(Base):
+    """Cuánto de una subreceta lleva una unidad de un producto de la carta (en la unidad de rendimiento)."""
+
+    __tablename__ = "recetas_carta_sub"
+    __table_args__ = (UniqueConstraint("producto_id", "subreceta_id"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    product_id: Mapped[int] = mapped_column("producto_id", ForeignKey("productos.id", ondelete="CASCADE"), nullable=False)
+    sub_id: Mapped[int] = mapped_column("subreceta_id", ForeignKey("subrecetas.id", ondelete="CASCADE"), nullable=False)
+    quantity: Mapped[Decimal] = mapped_column("cantidad", Numeric(12, 3), nullable=False)
+
+
 class StockMovement(Base):
     __tablename__ = "movimientos_stock"
 

@@ -902,3 +902,28 @@ def test_backup_download_owner_only(tmp_path):
         assert r.status_code == 200 and "attachment" in r.headers["content-disposition"]
         data = r.json()
         assert data["app"] == "caraboa-express-pos" and "ventas" in data["tables"] and "usuarios_app" not in data["tables"]
+
+
+def test_sub_recipe_deducts_proportionally_and_restores(tmp_path):
+    from fastapi.testclient import TestClient
+    app = create_app(database_url=f"sqlite:///{tmp_path}/s.db", frontend_dist=None, admin_pin="1111", manager_pin="2222")
+    with TestClient(app) as c:
+        h = {"X-Admin-Pin": "1111"}
+        def item(name, unit, stock, cost):
+            return c.post("/api/stock-items", headers=h, json={"kind": "INSUMO", "name": name, "unit": unit, "initialStock": stock, "minStock": 0, "unitCost": cost, "supplierId": None, "active": True}).json()["id"]
+        flour, cheese = item("Harina", "kg", 10, 5), item("Queso", "kg", 5, 40)
+        # Masa: un lote de 3000 g lleva 2 kg de harina → cada 300 g de masa gastan 0,2 kg
+        r = c.post("/api/sub-recipes", headers=h, json={"name": "Masa", "yieldQuantity": 3000, "yieldUnit": "g", "lines": [{"itemId": flour, "quantity": 2}]})
+        assert r.status_code == 201, r.text
+        sub = r.json(); assert sub["batchCost"] == 10 and abs(sub["unitCost"] - 10 / 3000) < 1e-9
+        rec = c.put("/api/products/1/recipe", headers=h, json={"lines": [{"itemId": cheese, "quantity": 0.15}], "subLines": [{"subId": sub["id"], "quantity": 300}], "margin": 60})
+        assert rec.status_code == 200, rec.text
+        assert rec.json()["cost"] == 7.0 and rec.json()["subLines"][0]["lineCost"] == 1.0  # queso 6 + masa 1
+        stock = lambda i: next(x["stock"] for x in c.get("/api/stock-items", headers=h).json() if x["id"] == i)
+        c.post("/api/sync", json={"type": "shift.open", "clientId": "s1", "payload": {"openingCash": 0, "openedAt": "2026-11-12T12:00:00Z"}})
+        sale = c.post("/api/sync", json={"type": "sale.create", "clientId": "v1", "payload": {
+            "uuid_local": "v1", "turno_local_id": "s1", "subtotal": 50, "propina": 0, "envio": 0, "total": 50, "metodo_pago": "EFECTIVO",
+            "creado_en": "2026-11-12T13:00:00Z", "detalles": [{"productId": 1, "name": "Pizza", "quantity": 2, "price": 25, "subtotal": 50}]}})
+        assert sale.status_code == 200, sale.text
+        assert abs(stock(flour) - 9.6) < 1e-6 and abs(stock(cheese) - 4.7) < 1e-6
+        assert c.delete(f"/api/sub-recipes/{sub['id']}", headers=h).json()["removedFromRecipes"]

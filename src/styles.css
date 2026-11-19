@@ -739,3 +739,12 @@ button:not(.nav-item):not(.user-more) { min-height: 40px; }
 .qty-unit { grid-template-columns: minmax(70px,1fr) 78px; }
 .modal-wide { max-width: 1060px; }
 .unit-select { min-height: 38px; border: 0; background: transparent; font-weight: 800; font-size: 15px; color: var(--ink); }
+.sub-recipes { margin-top: 34px; }
+.sub-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; margin-bottom: 14px; }
+.sub-head h2 { margin: 0 0 4px; font-family: 'Space Grotesk', sans-serif; font-size: 24px; }
+.sub-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 14px; }
+.sub-card { position: relative; display: grid; gap: 6px; padding: 16px; border: 2px solid #eadfd0; border-bottom: 6px solid var(--orange); border-radius: 18px; background: #fff; cursor: pointer; }
+.sub-card header { display: flex; align-items: center; gap: 8px; color: var(--orange); font-size: 18px; }
+.sub-card header strong { color: var(--ink); }
+.sub-card p { margin: 0; font-size: 15px; }
+.sub-card .row-actions { position: absolute; top: 12px; right: 12px; display: flex; gap: 6px; }

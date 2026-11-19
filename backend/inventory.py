@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 
 from zoneinfo import ZoneInfo
 
-from .models import Equipment, Product, Purchase, PurchaseLine, RecipeLine, StockItem, StockLot, StockMovement, Supplier
+from .models import Equipment, Product, Purchase, PurchaseLine, RecipeLine, RecipeSubLine, StockItem, StockLot, StockMovement, SubRecipe, SubRecipeLine, Supplier
 
 UNITS = ("unid", "kg", "g", "l", "ml")
 ACCOUNTS = ("CAJA", "BANCO", "MERCADOPAGO", "TARJETA")
@@ -99,8 +99,14 @@ class RecipeLineInput(BaseModel):
     quantity: Decimal = Field(gt=0, max_digits=12, decimal_places=3)
 
 
+class RecipeSubLineInput(BaseModel):
+    sub_id: int = Field(alias="subId")
+    quantity: Decimal = Field(gt=0, max_digits=12, decimal_places=3)
+
+
 class RecipeInput(BaseModel):
     lines: list[RecipeLineInput]
+    sub_lines: list[RecipeSubLineInput] = Field(default_factory=list, alias="subLines")
     margin: Decimal | None = Field(default=None, ge=0, le=10000, max_digits=6, decimal_places=2)
 
 
@@ -163,6 +169,39 @@ def suggested_price(cost: Decimal, margin: Decimal | None) -> float | None:
     return float(math.ceil(cost * (1 + margin / 100) / 10) * 10)
 
 
+def sub_unit_cost(session: Session, sub: SubRecipe) -> Decimal:
+    """Costo de 1 unidad de rendimiento (1 g de masa, por ejemplo) según los insumos del lote."""
+    batch = sum((line.quantity * item.unit_cost for line, item in session.execute(
+        select(SubRecipeLine, StockItem).join(StockItem, SubRecipeLine.item_id == StockItem.id).where(SubRecipeLine.sub_id == sub.id)
+    ).all()), Decimal("0"))
+    return batch / sub.yield_quantity if sub.yield_quantity > 0 else Decimal("0")
+
+
+def product_consumption(session: Session, product_id: int) -> list[tuple[StockItem, Decimal]]:
+    """Artículos que descuenta UNA unidad vendida: los de la receta más los de sus subrecetas (proporcional a lo que lleva)."""
+    used: dict[int, tuple[StockItem, Decimal]] = {}
+
+    def add(item: StockItem, quantity: Decimal) -> None:
+        current = used.get(item.id)
+        used[item.id] = (item, (current[1] if current else Decimal("0")) + quantity)
+
+    for line, item in session.execute(
+        select(RecipeLine, StockItem).join(StockItem, RecipeLine.item_id == StockItem.id).where(RecipeLine.product_id == product_id)
+    ).all():
+        add(item, line.quantity)
+    for sub_line, sub in session.execute(
+        select(RecipeSubLine, SubRecipe).join(SubRecipe, RecipeSubLine.sub_id == SubRecipe.id).where(RecipeSubLine.product_id == product_id)
+    ).all():
+        if sub.yield_quantity <= 0:
+            continue
+        share = sub_line.quantity / sub.yield_quantity
+        for line, item in session.execute(
+            select(SubRecipeLine, StockItem).join(StockItem, SubRecipeLine.item_id == StockItem.id).where(SubRecipeLine.sub_id == sub.id)
+        ).all():
+            add(item, (line.quantity * share).quantize(Decimal("0.000001")))
+    return list(used.values())
+
+
 def recipe_summary(session: Session, product: Product) -> dict[str, Any]:
     rows = session.execute(
         select(RecipeLine, StockItem).join(StockItem, RecipeLine.item_id == StockItem.id)
@@ -177,13 +216,24 @@ def recipe_summary(session: Session, product: Product) -> dict[str, Any]:
             "itemId": item.id, "name": item.name, "kind": item.kind, "unit": item.unit,
             "quantity": float(line.quantity), "unitCost": float(item.unit_cost), "lineCost": money(line_cost),
         })
+    sub_lines = []
+    for sub_line, sub in session.execute(
+        select(RecipeSubLine, SubRecipe).join(SubRecipe, RecipeSubLine.sub_id == SubRecipe.id)
+        .where(RecipeSubLine.product_id == product.id).order_by(SubRecipe.name)
+    ).all():
+        unit_cost = sub_unit_cost(session, sub)
+        line_cost = sub_line.quantity * unit_cost
+        cost += line_cost
+        sub_lines.append({"subId": sub.id, "name": sub.name, "unit": sub.yield_unit, "quantity": float(sub_line.quantity),
+                          "unitCost": float(unit_cost), "lineCost": money(line_cost)})
     price = product.price
+    has_lines = bool(lines or sub_lines)
     return {
-        "productId": product.id, "lines": lines, "cost": money(cost), "price": float(price),
+        "productId": product.id, "lines": lines, "subLines": sub_lines, "cost": money(cost), "price": float(price),
         "margin": float(product.margin) if product.margin is not None else None,
         "suggestedPrice": suggested_price(cost, product.margin),
-        "profit": money(price - cost) if lines else None,
-        "profitPercent": round(float((price - cost) / cost * 100), 1) if lines and cost > 0 else None,
+        "profit": money(price - cost) if has_lines else None,
+        "profitPercent": round(float((price - cost) / cost * 100), 1) if has_lines and cost > 0 else None,
     }
 
 
@@ -202,10 +252,8 @@ def consume_lots(session: Session, item_id: int, quantity: Decimal) -> None:
 def deduct_stock_for_sale(session: Session, sale_id: int | None, items: list[tuple[int, int]], when: datetime, note: str = "") -> None:
     """Descuenta del inventario lo que lleva cada producto vendido según su receta (el stock puede quedar negativo)."""
     for product_id, quantity in items:
-        for line, item in session.execute(
-            select(RecipeLine, StockItem).join(StockItem, RecipeLine.item_id == StockItem.id).where(RecipeLine.product_id == product_id)
-        ).all():
-            used = line.quantity * quantity
+        for item, per_unit in product_consumption(session, product_id):
+            used = per_unit * quantity
             item.stock -= used
             consume_lots(session, item.id, used)
             session.add(StockMovement(
@@ -216,10 +264,8 @@ def deduct_stock_for_sale(session: Session, sale_id: int | None, items: list[tup
 def restore_stock_for_order(session: Session, items: list[tuple[int, int]], when: datetime, note: str) -> None:
     """Devuelve al inventario lo descontado por un pedido que se cancela (no reconstruye los lotes)."""
     for product_id, quantity in items:
-        for line, item in session.execute(
-            select(RecipeLine, StockItem).join(StockItem, RecipeLine.item_id == StockItem.id).where(RecipeLine.product_id == product_id)
-        ).all():
-            used = line.quantity * quantity
+        for item, per_unit in product_consumption(session, product_id):
+            used = per_unit * quantity
             item.stock += used
             session.add(StockMovement(item_id=item.id, kind="AJUSTE", quantity=used, unit_cost=item.unit_cost, note=note, created_at=when))
 
@@ -339,6 +385,7 @@ def register_inventory_routes(app: FastAPI, get_db: Callable[..., Any], require_
         removed_from = recipes_using(session, item.id).get(item.id, [])
         # Se quita de las recetas para que las próximas ventas no lo descuenten; sus movimientos quedan en el historial.
         session.execute(delete(RecipeLine).where(RecipeLine.item_id == item.id))
+        session.execute(delete(SubRecipeLine).where(SubRecipeLine.item_id == item.id))
         item.is_deleted = True
         item.is_active = False
         session.commit()
@@ -468,8 +515,16 @@ def register_inventory_routes(app: FastAPI, get_db: Callable[..., Any], require_
             raise HTTPException(status_code=422, detail="Un artículo aparece dos veces en la receta")
         for item_id in item_ids:
             get_or_404(session, StockItem, item_id, "Artículo")
+        sub_ids = [line.sub_id for line in data.sub_lines]
+        if len(set(sub_ids)) != len(sub_ids):
+            raise HTTPException(status_code=422, detail="Una subreceta aparece dos veces en la receta")
+        for sub_id in sub_ids:
+            if session.get(SubRecipe, sub_id) is None:
+                raise HTTPException(status_code=404, detail="Subreceta no encontrada")
         session.execute(delete(RecipeLine).where(RecipeLine.product_id == product.id))
+        session.execute(delete(RecipeSubLine).where(RecipeSubLine.product_id == product.id))
         session.add_all(RecipeLine(product_id=product.id, item_id=line.item_id, quantity=line.quantity) for line in data.lines)
+        session.add_all(RecipeSubLine(product_id=product.id, sub_id=line.sub_id, quantity=line.quantity) for line in data.sub_lines)
         product.margin = data.margin
         session.commit()
         return recipe_summary(session, product)
