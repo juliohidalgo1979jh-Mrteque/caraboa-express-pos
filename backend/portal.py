@@ -15,7 +15,7 @@ from .coupons import CouponError, evaluate_code, redeem, release_order
 from .customers import credit_purchase, find_or_create_customer, serialize_reward
 from .inventory import deduct_stock_for_sale, now_utc, restore_stock_for_order
 from .pix import read_pix
-from .models import Category, OnlineOrder, Sale, SaleDetail, Shift, OnlineOrderItem, Product, ProductText, Promotion, Setting
+from .models import Customer, StockMovement, Category, OnlineOrder, Sale, SaleDetail, Shift, OnlineOrderItem, Product, ProductText, Promotion, Setting
 from .reports import LOCAL_TZ
 
 LANGS = ("es", "pt", "en")
@@ -530,6 +530,52 @@ def register_portal_routes(app: FastAPI, get_db: Callable[..., Any], require_adm
             for item in session.scalars(select(OnlineOrderItem).where(OnlineOrderItem.order_id.in_(items)).order_by(OnlineOrderItem.id)):
                 items[item.order_id].append(item)
         return [serialize_order(order, items[order.id]) for order in orders]
+
+    def purge_order(session: Session, order: OnlineOrder) -> None:
+        """Borra un pedido (por ejemplo de prueba) y deshace sus efectos: stock, código usado, venta y puntos del cliente."""
+        items = list(session.scalars(select(OnlineOrderItem).where(OnlineOrderItem.order_id == order.id)))
+        if order.stock_deducted:
+            restore_stock_for_order(session, [(item.product_id, item.quantity) for item in items], now_utc(), f"Pedido online {order.code} eliminado")
+            order.stock_deducted = False
+        release_order(session, order.id)
+        if order.sale_id is not None:
+            sale = session.get(Sale, order.sale_id)
+            if sale is not None:
+                customer = session.get(Customer, sale.customer_id) if sale.customer_id else None
+                if customer is not None:
+                    customer.orders_count = max(0, customer.orders_count - 1)
+                    customer.total_spent = max(Decimal("0"), customer.total_spent - (sale.subtotal - sale.discount))
+                    customer.progress = max(0, customer.progress - 1)
+                for movement in session.scalars(select(StockMovement).where(StockMovement.sale_id == sale.id)):
+                    movement.sale_id = None
+                for detail in session.scalars(select(SaleDetail).where(SaleDetail.sale_id == sale.id)):
+                    session.delete(detail)
+                session.flush()
+                session.delete(sale)
+        for item in items:
+            session.delete(item)
+        session.flush()
+        session.delete(order)
+
+    # Solo el dueño puede borrar (el resto de los roles no tiene permiso de DELETE).
+    @app.delete("/api/portal/orders/{order_id}", dependencies=[Depends(require_admin)])
+    def delete_order(order_id: int, session: Session = Depends(get_db)) -> dict[str, Any]:
+        order = session.get(OnlineOrder, order_id)
+        if order is None:
+            raise HTTPException(status_code=404, detail="Pedido no encontrado")
+        purge_order(session, order)
+        session.commit()
+        return {"ok": True}
+
+    @app.delete("/api/portal/orders", dependencies=[Depends(require_admin)])
+    def delete_all_orders(confirm: str = Query(default=""), session: Session = Depends(get_db)) -> dict[str, Any]:
+        if confirm != "BORRAR":
+            raise HTTPException(status_code=422, detail="Escribe BORRAR para confirmar")
+        orders = list(session.scalars(select(OnlineOrder)))
+        for order in orders:
+            purge_order(session, order)
+        session.commit()
+        return {"ok": True, "deleted": len(orders)}
 
     @app.put("/api/portal/orders/{order_id}", dependencies=[Depends(require_admin)])
     def set_order_status(order_id: int, data: StatusInput, session: Session = Depends(get_db)) -> dict[str, Any]:

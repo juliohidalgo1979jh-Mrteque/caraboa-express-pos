@@ -83,7 +83,7 @@ export function portalUrl(): string {
   return `${window.location.origin}/pedir`;
 }
 
-export function PortalAdmin({ pin, onToast }: { pin: string; onToast: (message: string) => void }) {
+export function PortalAdmin({ pin, onToast, isOwner = false }: { pin: string; onToast: (message: string) => void; isOwner?: boolean }) {
   const [tab, setTab] = useState<Tab>('orders');
   return (
     <section className="history-page menu-page">
@@ -91,7 +91,7 @@ export function PortalAdmin({ pin, onToast }: { pin: string; onToast: (message: 
       <div className="category-tabs admin-tabs" role="tablist" aria-label="Secciones del portal">
         {(Object.keys(tabLabels) as Tab[]).map((key) => <button key={key} role="tab" aria-selected={tab === key} className={tab === key ? 'selected' : ''} onClick={() => setTab(key)}>{tabLabels[key]}</button>)}
       </div>
-      {tab === 'orders' && <OrdersTab pin={pin} onToast={onToast} />}
+      {tab === 'orders' && <OrdersTab pin={pin} onToast={onToast} isOwner={isOwner} />}
       {tab === 'promos' && <PromosTab pin={pin} onToast={onToast} />}
       {tab === 'texts' && <TextsTab pin={pin} onToast={onToast} />}
       {tab === 'settings' && <SettingsTab pin={pin} onToast={onToast} />}
@@ -152,7 +152,7 @@ function whatsappLink(order: OnlineOrder, text: string): string {
   return `https://wa.me/${whatsappNumber(order.phone)}?text=${encodeURIComponent(text)}`;
 }
 
-function OrdersTab({ pin, onToast }: { pin: string; onToast: (message: string) => void }) {
+function OrdersTab({ pin, onToast, isOwner }: { pin: string; onToast: (message: string) => void; isOwner: boolean }) {
   const [scope, setScope] = useState<'active' | 'all'>('active');
   const { items: orders, error, loading, reload } = useAdminList<OnlineOrder>(`/api/portal/orders?scope=${scope}`, pin);
 
@@ -163,6 +163,25 @@ function OrdersTab({ pin, onToast }: { pin: string; onToast: (message: string) =
   }, [reload]);
 
   const [fees, setFees] = useState<Record<number, string>>({});
+  const [toDelete, setToDelete] = useState<OnlineOrder | 'all' | null>(null);
+  const [confirmText, setConfirmText] = useState('');
+  const [deleteError, setDeleteError] = useState('');
+  const [deleting, setDeleting] = useState(false);
+
+  async function confirmDelete() {
+    if (!toDelete) return;
+    if (toDelete === 'all' && confirmText.trim().toUpperCase() !== 'BORRAR') { setDeleteError('Escribe BORRAR para confirmar.'); return; }
+    setDeleting(true);
+    const result = toDelete === 'all'
+      ? await adminRequest<{ deleted: number }>('/api/portal/orders?confirm=BORRAR', 'DELETE', undefined, pin)
+      : await adminRequest<{ ok: boolean }>(`/api/portal/orders/${toDelete.id}`, 'DELETE', undefined, pin);
+    setDeleting(false);
+    if (!result.ok) { setDeleteError(result.message); return; }
+    onToast(toDelete === 'all' ? 'Pedidos borrados' : `${toDelete.code} eliminado`);
+    setToDelete(null);
+    setConfirmText('');
+    void reload();
+  }
   const [payFor, setPayFor] = useState<OnlineOrder | null>(null);
   const [payMethod, setPayMethod] = useState<(typeof PAY_METHODS)[number]>('QR');
 
@@ -220,7 +239,10 @@ function OrdersTab({ pin, onToast }: { pin: string; onToast: (message: string) =
           <button className={scope === 'active' ? 'selected' : ''} onClick={() => setScope('active')}>En curso{scope === 'active' && newCount > 0 ? ` · ${newCount} nuevos` : ''}</button>
           <button className={scope === 'all' ? 'selected' : ''} onClick={() => setScope('all')}>Todos</button>
         </div>
-        <button className="secondary-button" onClick={() => void reload()}>Actualizar</button>
+        <div className="portal-toolbar-actions">
+          {isOwner && orders.length > 0 && <button className="secondary-button danger-outline" onClick={() => { setDeleteError(''); setConfirmText(''); setToDelete('all'); }}><Trash2 size={14} /> Borrar todos</button>}
+          <button className="secondary-button" onClick={() => void reload()}>Actualizar</button>
+        </div>
       </div>
       {error && <p className="form-error" role="alert">{error}</p>}
       {!loading && orders.length === 0 && <div className="history-empty"><span className="empty-bag"><Globe size={25} /></span><strong>Todavía no hay pedidos online</strong><span>Comparte el enlace del portal (pestaña “Enlace y ajustes”) en el perfil de WhatsApp y en Instagram.</span></div>}
@@ -259,6 +281,7 @@ function OrdersTab({ pin, onToast }: { pin: string; onToast: (message: string) =
                 </div>
                 <div className="order-actions">
                   {open && <button className="secondary-button" onClick={() => void update(order, { status: 'CANCELADO' }, order.paid ? 'cancelado. Recuerda devolver el pago al cliente' : 'cancelado')}>Cancelar</button>}
+                  {isOwner && <button className="icon-button danger-button" aria-label={`Eliminar pedido ${order.code}`} title="Eliminar pedido" onClick={() => { setDeleteError(''); setToDelete(order); }}><Trash2 size={15} /></button>}
                   {action && <button className="modal-primary" onClick={action.run}>{action.label}</button>}
                 </div>
               </footer>
@@ -273,6 +296,12 @@ function OrdersTab({ pin, onToast }: { pin: string; onToast: (message: string) =
         <div className="method-options" role="group" aria-label="Medio de pago">{PAY_METHODS.map((method) => <button type="button" key={method} className={payMethod === method ? 'selected' : ''} aria-pressed={payMethod === method} onClick={() => setPayMethod(method)}>{paymentLabels[method]}</button>)}</div>
         <button className="modal-primary" onClick={() => void update(payFor, { paid: true, paymentMethod: payMethod }, 'pago confirmado')}>Pago recibido <Check size={18} /></button>
       </Modal>}
+      {toDelete && <ConfirmDelete
+        title={toDelete === 'all' ? 'Borrar todos los pedidos' : `Eliminar pedido ${toDelete.code}`}
+        message={toDelete === 'all'
+          ? <><p>Se borrarán <strong>todos los pedidos online</strong> (en curso, entregados y cancelados). Las ventas que generaron salen de Reportes y Finanzas, el stock vuelve al inventario y los códigos promocionales se liberan. No se puede deshacer.</p><label className="field-label" htmlFor="confirm-all">Escribe BORRAR para confirmar</label><input id="confirm-all" className="text-input" autoComplete="off" value={confirmText} onChange={(event) => { setConfirmText(event.target.value); setDeleteError(''); }} /></>
+          : <p>Se eliminará el pedido de <strong>{toDelete.name}</strong>. Si ya estaba entregado, su venta también sale de Reportes y Finanzas. No se puede deshacer.</p>}
+        error={deleteError} busy={deleting} onCancel={() => setToDelete(null)} onConfirm={() => void confirmDelete()} />}
     </>
   );
 }

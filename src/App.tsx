@@ -726,7 +726,7 @@ function App() {
             {activeScreen === 'recipes' && <RecipesAdmin pin={adminPin} menu={menu} onProductSaved={(saved) => setMenu((items) => items.map((item) => (item.id === saved.id ? saved : item)))} onProductDeleted={removeProduct} onToast={setToast} />}
             {activeScreen === 'suppliers' && <SuppliersAdmin pin={adminPin} onToast={setToast} />}
             {activeScreen === 'equipment' && <EquipmentAdmin pin={adminPin} onToast={setToast} />}
-            {activeScreen === 'portal' && <PortalAdmin pin={adminPin} onToast={setToast} />}
+            {activeScreen === 'portal' && <PortalAdmin pin={adminPin} onToast={setToast} isOwner={adminRole === null || adminRole === 'DUENO'} />}
             {activeScreen === 'expenses' && <ExpensesAdmin pin={adminPin} onToast={setToast} />}
             {activeScreen === 'finance' && <FinanceAdmin pin={adminPin} onToast={setToast} />}
             {activeScreen === 'points' && <><PointsAdmin pin={adminPin} points={points} devicePointId={devicePoint?.id ?? null} onSaved={savePoint} /><PixSettings pin={adminPin} config={pixConfig} onSaved={setPixConfig} /></>}

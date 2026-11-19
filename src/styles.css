@@ -667,3 +667,6 @@ a.order-send-total{text-decoration:none;text-align:center}
 .coupon-ok { margin: 0; font-size: 13px; color: #1b7a43; }
 .pending-box:has(> svg + span){display:flex;align-items:flex-start;gap:10px;font-size:13px;line-height:1.45}
 .pending-box:has(> svg + span) svg{flex-shrink:0;margin-top:2px}
+
+.portal-toolbar-actions { display: flex; gap: 8px; align-items: center; }
+.danger-outline { color: #b3261e; border-color: #b3261e; display: inline-flex; align-items: center; gap: 6px; }

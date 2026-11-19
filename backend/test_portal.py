@@ -254,3 +254,27 @@ def test_payment_page_info_needs_secret_token_and_waits_for_delivery_fee(tmp_pat
         assert ready["ready"] and ready["total"] == round(pickup["total"] + 8, 2)
         client.put(f"/api/portal/orders/{pickup['id']}", json={"paid": True, "paymentMethod": "QR"}, headers=PIN)
         assert client.get(f"/api/portal/pay/{pickup['code']}", params={"t": pickup["payToken"]}).json()["paid"] is True
+
+
+def test_owner_can_delete_orders_and_undo_their_effects(tmp_path):
+    from backend.test_coupons import open_shift  # abre un turno para poder entregar
+    with TestClient(create_app(f"sqlite:///{tmp_path / 'd.db'}", admin_pin="1234", manager_pin="5678")) as client:
+        open_shift(client)
+        items = [{"productId": 1, "quantity": 1}]
+        base = client.get("/api/reports/daily", headers=PIN).json()["salesCount"]
+        delivered = client.post("/api/portal/orders", json=order(items=items)).json()
+        client.put(f"/api/portal/orders/{delivered['id']}", json={"paid": True, "paymentMethod": "QR"}, headers=PIN)
+        client.put(f"/api/portal/orders/{delivered['id']}", json={"status": "ENTREGADO"}, headers=PIN)
+        assert client.get("/api/reports/daily", headers=PIN).json()["salesCount"] == base + 1
+        pending = client.post("/api/portal/orders", json=order(items=items, phone="+55 48 91111-2222")).json()
+        # el encargado no puede borrar
+        manager = {"X-Admin-Pin": "5678"}
+        assert client.delete(f"/api/portal/orders/{pending['id']}", headers=manager).status_code == 403
+        assert client.delete(f"/api/portal/orders/{pending['id']}").status_code == 401
+        assert client.delete(f"/api/portal/orders/{pending['id']}", headers=PIN).json() == {"ok": True}
+        assert client.delete(f"/api/portal/orders/{pending['id']}", headers=PIN).status_code == 404
+        # borrar todo exige confirmar y revierte la venta entregada
+        assert client.delete("/api/portal/orders", headers=PIN).status_code == 422
+        assert client.delete("/api/portal/orders?confirm=BORRAR", headers=PIN).json() == {"ok": True, "deleted": 1}
+        assert client.get("/api/portal/orders?scope=all", headers=PIN).json() == []
+        assert client.get("/api/reports/daily", headers=PIN).json()["salesCount"] == base
